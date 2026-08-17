@@ -1,0 +1,44 @@
+[
+  {
+    "id": "TASK-001",
+    "source": {
+      "type": "manual",
+      "externalId": null,
+      "sync": false
+    },
+    "project": {
+      "id": "comfyui",
+      "root": "F:/try/ComfyUI"
+    },
+    "requirement": {
+      "title": "新增人物卡通化工作流",
+      "description": "增加人物卡通化工作流，输入人物图片 返回卡通化人物图片",
+      "constraints": []
+    },
+    "priority": "normal",
+    "mode": "auto",
+    "status": "PLANNING",
+    "analysis": {
+      "type": null,
+      "complexity": null,
+      "risk": null
+    },
+    "plan": null,
+    "execution": {
+      "round": 0,
+      "changes": []
+    },
+    "verification": {
+      "results": []
+    },
+    "review": {
+      "round": 0,
+      "result": null,
+      "issues": []
+    },
+    "arbitration": null,
+    "timeline": [],
+    "createdAt": "2026-08-17T23:45:00.000Z",
+    "updatedAt": "2026-08-17T16:02:02.971Z"
+  }
+]

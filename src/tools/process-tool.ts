@@ -52,12 +52,21 @@ export async function runProcess(
   const cwd = options.cwd || process.cwd();
   const timeoutMs = options.timeoutMs || 120000;
 
+  let finalCommand = command;
+  if (process.platform === 'win32') {
+    const parts = command.split(' ');
+    if (parts[0].includes('/')) {
+      parts[0] = path.normalize(parts[0]);
+      finalCommand = parts.join(' ');
+    }
+  }
+
   return new Promise((resolve) => {
     const stdoutChunks: Buffer[] = [];
     const stderrChunks: Buffer[] = [];
     let timedOut = false;
 
-    const child = spawn(command, {
+    const child = spawn(finalCommand, {
       cwd,
       shell: process.platform === 'win32',
       env: { ...process.env, ...options.env },

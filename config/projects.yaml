@@ -16,6 +16,8 @@ projects:
       - comfy
       - 绘图工作流
       - 工作流
+    commands:
+      test: .venv/Scripts/python.exe main.py --quick-test-for-ci
 
   demo:
     name: Demo Project
