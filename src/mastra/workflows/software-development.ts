@@ -1,3 +1,5 @@
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import path from 'node:path';
 import { createStep, createWorkflow } from '@mastra/core/workflows';
 import { z } from 'zod';
 import { TaskSchema, InternalTask, TaskArbitrationSchema } from '../../task/schema/task.schema.js';
@@ -33,6 +35,36 @@ export const softwareDevelopmentOutputSchema = z.object({
   needArbitration: z.boolean().default(false),
   arbitration: TaskArbitrationSchema.optional(),
 });
+
+function applyModelFileChanges(output: string, projectRoot: string, taskRequirement: string): void {
+  if (!output) return;
+
+  const reqText = taskRequirement || '';
+  const match = reqText.match(/([a-zA-Z]:[\\/][^\s"'\n]+\.(?:json|py|md|yaml|txt)|[\w_\\/\.-]+\.(?:json|py|md|yaml|txt))/i);
+
+  if (match) {
+    let targetPath = match[1];
+    if (!path.isAbsolute(targetPath)) {
+      targetPath = path.resolve(projectRoot, targetPath);
+    }
+
+    const jsonBlock = output.match(/```json\s*([\s\S]*?)\s*```/i) || output.match(/```\s*([\s\S]*?)\s*```/i);
+    let fileContent = jsonBlock ? jsonBlock[1].trim() : (output.trim().startsWith('{') ? output.trim() : null);
+
+    if (fileContent) {
+      try {
+        const dir = path.dirname(targetPath);
+        if (!existsSync(dir)) {
+          mkdirSync(dir, { recursive: true });
+        }
+        writeFileSync(targetPath, fileContent, 'utf-8');
+        console.log(`[Workflow Engine] Auto-applied generated model output to '${targetPath}'`);
+      } catch (err) {
+        console.warn(`[Workflow Engine] Could not auto-apply output to '${targetPath}':`, err);
+      }
+    }
+  }
+}
 
 export async function executeSoftwareDevelopmentLoop(
   task: InternalTask,
@@ -87,6 +119,15 @@ export async function executeSoftwareDevelopmentLoop(
       needArbitration: false,
       error: devResp.error || 'Developer initial coding failed',
     };
+  }
+
+  if (devResp.output) {
+    const outputStr = typeof devResp.output === 'string' ? devResp.output : JSON.stringify(devResp.output);
+    applyModelFileChanges(
+      outputStr,
+      projectContext.projectRoot,
+      `${currentTask.requirement.title}\n${currentTask.requirement.description || ''}`
+    );
   }
 
   let round = 1;

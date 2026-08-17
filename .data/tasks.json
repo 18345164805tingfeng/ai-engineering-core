@@ -92,6 +92,112 @@
     "arbitration": null,
     "timeline": [],
     "createdAt": "2026-08-17T16:09:31.536Z",
-    "updatedAt": "2026-08-17T16:09:31.546Z"
+    "updatedAt": "2026-08-17T16:30:38.063Z"
+  },
+  {
+    "id": "TASK-1786983679694",
+    "source": {
+      "type": "manual",
+      "externalId": null,
+      "sync": false
+    },
+    "project": {
+      "id": "comfyui",
+      "root": "F:\\try\\ComfyUI"
+    },
+    "requirement": {
+      "title": "新增17_Wan_AI音频驱动口型表达工作流",
+      "description": "在 F:\\try\\ComfyUI\\user\\default\\workflows\\ 目录下新建一个名为 17_Wan_AI音频驱动口型表达.json 的工作流配置文件",
+      "constraints": []
+    },
+    "priority": "normal",
+    "mode": "auto",
+    "status": "PLANNING",
+    "analysis": {
+      "type": null,
+      "complexity": null,
+      "risk": null
+    },
+    "plan": null,
+    "execution": {
+      "round": 0,
+      "changes": []
+    },
+    "verification": {
+      "results": []
+    },
+    "review": {
+      "round": 0,
+      "result": null,
+      "issues": []
+    },
+    "arbitration": null,
+    "timeline": [
+      {
+        "id": "e2c35c7a-7c79-4975-b5d5-6a99da12e575",
+        "type": "TASK_CREATED",
+        "timestamp": "2026-08-17T16:21:19.694Z",
+        "message": "Task TASK-1786983679694 created with status PLANNING",
+        "payload": {
+          "projectId": "comfyui",
+          "source": "manual"
+        }
+      }
+    ],
+    "createdAt": "2026-08-17T16:21:19.694Z",
+    "updatedAt": "2026-08-17T16:21:19.694Z"
+  },
+  {
+    "id": "TASK-1786984073477",
+    "source": {
+      "type": "manual",
+      "externalId": null,
+      "sync": false
+    },
+    "project": {
+      "id": "comfyui",
+      "root": "F:\\try\\ComfyUI"
+    },
+    "requirement": {
+      "title": "新增17_Wan_AI音频驱动口型表达工作流",
+      "description": "在 F:\\try\\ComfyUI\\user\\default\\workflows\\ 目录下新建一个名为 17_Wan_AI音频驱动口型表达.json 的工作流配置文件",
+      "constraints": []
+    },
+    "priority": "normal",
+    "mode": "auto",
+    "status": "PLANNING",
+    "analysis": {
+      "type": null,
+      "complexity": null,
+      "risk": null
+    },
+    "plan": null,
+    "execution": {
+      "round": 0,
+      "changes": []
+    },
+    "verification": {
+      "results": []
+    },
+    "review": {
+      "round": 0,
+      "result": null,
+      "issues": []
+    },
+    "arbitration": null,
+    "timeline": [
+      {
+        "id": "82cabbd2-61be-4de6-8d07-51aea61c9791",
+        "type": "TASK_CREATED",
+        "timestamp": "2026-08-17T16:27:53.478Z",
+        "message": "Task TASK-1786984073477 created with status PLANNING",
+        "payload": {
+          "projectId": "comfyui",
+          "source": "manual"
+        }
+      }
+    ],
+    "createdAt": "2026-08-17T16:27:53.477Z",
+    "updatedAt": "2026-08-17T16:27:53.478Z"
   }
 ]

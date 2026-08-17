@@ -12,7 +12,7 @@
     },
     "requirement": {
       "title": "新增人物卡通化工作流",
-      "description": "新增一个工作流 输入人物图片 输出卡通化的人物图片",
+      "description": "新增一个工作流18_人物卡通化， 输入人物图片 输出卡通化的人物图片",
       "constraints": []
     },
     "priority": "normal",
@@ -39,6 +39,6 @@
     "arbitration": null,
     "timeline": [],
     "createdAt": "2026-08-17T23:45:00.000Z",
-    "updatedAt": "2026-08-17T16:07:48.262Z"
+    "updatedAt": "2026-08-17T16:24:41.929Z"
   }
 ]
