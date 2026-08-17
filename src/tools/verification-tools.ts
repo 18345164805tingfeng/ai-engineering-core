@@ -93,7 +93,7 @@ export async function runTestTool(
   const venvPythonWin = path.join(cwd, '.venv', 'Scripts', 'python.exe');
   if (!cmd || cmd === 'pytest') {
     if (existsSync(venvPythonWin)) {
-      cmd = '.venv/Scripts/python.exe main.py --quick-test-for-ci';
+      cmd = '.venv/Scripts/python.exe main.py --quick-test-for-ci --disable-manager';
     } else {
       cmd = 'npm test';
     }
@@ -107,7 +107,7 @@ export async function runTestTool(
   // Fallback to project venv python if global command (like bare 'pytest') failed due to missing PATH binary
   if (!result.success && result.stderr.includes('不是内部或外部命令')) {
     if (existsSync(venvPythonWin) && !cmd.includes('.venv')) {
-      const fallbackCmd = '.venv/Scripts/python.exe main.py --quick-test-for-ci';
+      const fallbackCmd = '.venv/Scripts/python.exe main.py --quick-test-for-ci --disable-manager';
       const fallbackResult = await runProcess(fallbackCmd, { cwd, ...options });
       if (fallbackResult.success || fallbackResult.exitCode === 0) {
         return fallbackResult;
