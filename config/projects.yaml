@@ -7,6 +7,16 @@ projects:
       - ai-core
       - ai-engineering-core
 
+  comfyui:
+    name: ComfyUI
+    root: F:/try/ComfyUI
+    aliases:
+      - comfyui
+      - ComfyUI
+      - comfy
+      - 绘图工作流
+      - 工作流
+
   demo:
     name: Demo Project
     root: ./demo
