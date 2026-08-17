@@ -51,5 +51,47 @@
     ],
     "createdAt": "2026-08-17T15:56:38.584Z",
     "updatedAt": "2026-08-17T15:56:38.585Z"
+  },
+  {
+    "id": "TASK-5001",
+    "source": {
+      "type": "manual",
+      "externalId": null,
+      "sync": false
+    },
+    "project": {
+      "id": "demo",
+      "root": "G:\\ai-engineering-core"
+    },
+    "requirement": {
+      "title": "Complex Refactoring",
+      "description": "Refactor user module",
+      "constraints": []
+    },
+    "priority": "high",
+    "mode": "strict",
+    "status": "PLANNING",
+    "analysis": {
+      "type": null,
+      "complexity": null,
+      "risk": null
+    },
+    "plan": null,
+    "execution": {
+      "round": 0,
+      "changes": []
+    },
+    "verification": {
+      "results": []
+    },
+    "review": {
+      "round": 0,
+      "result": null,
+      "issues": []
+    },
+    "arbitration": null,
+    "timeline": [],
+    "createdAt": "2026-08-17T16:09:31.536Z",
+    "updatedAt": "2026-08-17T16:09:31.546Z"
   }
 ]

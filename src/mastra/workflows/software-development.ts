@@ -8,6 +8,8 @@ import { runTestTool, ProcessResult } from '../../tools/index.js';
 import { runPlannerRole } from '../agents/planner.js';
 import { runArchitectRole } from '../agents/architect.js';
 import { defaultTaskStore } from '../../task/store/task-store.js';
+import { defaultProjectResolver } from '../../project/project-resolver.js';
+import { ContextLoader } from '../../project/context-loader.js';
 
 export interface WorkflowOptions {
   executorRouter?: ExecutorRouter;
@@ -290,7 +292,26 @@ export const softwareDevelopmentStep = createStep({
   inputSchema: softwareDevelopmentInputSchema,
   outputSchema: softwareDevelopmentOutputSchema,
   execute: async ({ inputData }) => {
-    const { task, projectContext, maxRounds } = inputData;
+    let { task, projectContext, maxRounds } = inputData;
+
+    if (task?.project?.id) {
+      try {
+        defaultProjectResolver.loadConfig();
+        const resolved = defaultProjectResolver.resolveProject(task.project.id);
+        const loadedCtx = ContextLoader.loadContext(resolved);
+        projectContext = {
+          ...loadedCtx,
+          ...projectContext,
+          commands: {
+            ...loadedCtx.commands,
+            ...(projectContext?.commands || {}),
+          },
+        };
+      } catch {
+        // preserve original projectContext if resolution fails
+      }
+    }
+
     return await executeSoftwareDevelopmentLoop(task, projectContext, { maxRounds });
   },
 });

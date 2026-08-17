@@ -1,4 +1,5 @@
 import { spawn } from 'child_process';
+import path from 'node:path';
 
 export interface ProcessResult {
   command: string;
