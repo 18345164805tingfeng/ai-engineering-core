@@ -7,6 +7,7 @@ import { ExecutorRouter, defaultExecutorRouter } from '../../router/executor-rou
 import { runTestTool, ProcessResult } from '../../tools/index.js';
 import { runPlannerRole } from '../agents/planner.js';
 import { runArchitectRole } from '../agents/architect.js';
+import { defaultTaskStore } from '../../task/store/task-store.js';
 
 export interface WorkflowOptions {
   executorRouter?: ExecutorRouter;
@@ -46,6 +47,12 @@ export async function executeSoftwareDevelopmentLoop(
     execution: { round: 0, changes: [] },
     review: { round: 0, result: null, issues: [] },
   };
+
+  try {
+    await defaultTaskStore.createTask(currentTask);
+  } catch {
+    await defaultTaskStore.updateTask(currentTask.id, currentTask).catch(() => {});
+  }
 
   // Step 0: Planning (Planner Role)
   if (!options.skipPlanning) {

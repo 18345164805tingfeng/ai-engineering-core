@@ -1,0 +1,55 @@
+[
+  {
+    "id": "TASK-1786982198584",
+    "source": {
+      "type": "manual",
+      "externalId": null,
+      "sync": false
+    },
+    "project": {
+      "id": "comfyui",
+      "root": "F:\\try\\ComfyUI"
+    },
+    "requirement": {
+      "title": "更新日志规范",
+      "description": "检查项目 log 输出",
+      "constraints": []
+    },
+    "priority": "normal",
+    "mode": "auto",
+    "status": "PLANNING",
+    "analysis": {
+      "type": null,
+      "complexity": null,
+      "risk": null
+    },
+    "plan": null,
+    "execution": {
+      "round": 0,
+      "changes": []
+    },
+    "verification": {
+      "results": []
+    },
+    "review": {
+      "round": 0,
+      "result": null,
+      "issues": []
+    },
+    "arbitration": null,
+    "timeline": [
+      {
+        "id": "21f76864-eeed-4411-a070-07a258457673",
+        "type": "TASK_CREATED",
+        "timestamp": "2026-08-17T15:56:38.585Z",
+        "message": "Task TASK-1786982198584 created with status PLANNING",
+        "payload": {
+          "projectId": "comfyui",
+          "source": "manual"
+        }
+      }
+    ],
+    "createdAt": "2026-08-17T15:56:38.584Z",
+    "updatedAt": "2026-08-17T15:56:38.585Z"
+  }
+]

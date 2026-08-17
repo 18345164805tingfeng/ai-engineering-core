@@ -12,7 +12,8 @@
     "type-check": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "run-task": "tsx scripts/run-task.ts"
+    "run-task": "tsx scripts/run-task.ts",
+    "list-tasks": "tsx scripts/list-tasks.ts"
   },
   "keywords": [
     "mastra",
