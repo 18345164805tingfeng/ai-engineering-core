@@ -1,0 +1,7 @@
+projects:
+  demo:
+    name: Demo Project
+    root: ./demo
+    aliases:
+      - demo
+      - 示例项目

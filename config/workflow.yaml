@@ -1,0 +1,11 @@
+workflow:
+  defaultMode: standard
+
+review:
+  maxRounds: 3
+
+execution:
+  timeoutSeconds: 1800
+
+fallback:
+  enabled: true

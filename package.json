@@ -1,0 +1,38 @@
+{
+  "name": "ai-engineering-core",
+  "version": "0.1.0",
+  "description": "Universal multi-model AI software engineering orchestration system",
+  "type": "module",
+  "main": "dist/mastra/index.js",
+  "scripts": {
+    "dev": "tsx src/mastra/index.ts",
+    "mastra:dev": "mastra dev",
+    "mastra:build": "mastra build",
+    "build": "tsc",
+    "type-check": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "keywords": [
+    "mastra",
+    "workflow",
+    "ai-engineering",
+    "multi-agent",
+    "orchestration"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@mastra/core": "^1.59.0",
+    "dotenv": "^16.4.7",
+    "yaml": "^2.7.0",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.4",
+    "mastra": "^1.25.0",
+    "tsx": "^4.19.3",
+    "typescript": "^5.7.3",
+    "vitest": "^3.0.5"
+  }
+}

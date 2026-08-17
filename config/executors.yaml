@@ -1,0 +1,24 @@
+executors:
+  codex:
+    type: agent
+    provider: codex-cli
+
+  antigravity-reviewer:
+    type: agent
+    provider: antigravity
+    agent: reviewer
+
+  antigravity-planner:
+    type: agent
+    provider: antigravity
+    agent: planner
+
+  antigravity-architect:
+    type: agent
+    provider: antigravity
+    agent: architect
+
+  qwen-local:
+    type: model
+    provider: ollama
+    model: qwen

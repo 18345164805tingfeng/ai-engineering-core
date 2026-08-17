@@ -1,0 +1,24 @@
+roles:
+  router:
+    primary: qwen-local
+
+  planner:
+    primary: antigravity-planner
+    fallback:
+      - qwen-local
+
+  developer:
+    primary: codex
+    fallback:
+      - qwen-local
+
+  reviewer:
+    primary: antigravity-reviewer
+    fallback:
+      - qwen-local
+
+  architect:
+    primary: antigravity-architect
+    fallback:
+      - qwen-local
+      - human
