@@ -21,6 +21,24 @@ export interface ProcessOptions {
   ) => Promise<ProcessResult>;
 }
 
+export function decodeOutputBuffer(buffers: Buffer[]): string {
+  if (!buffers || buffers.length === 0) return '';
+  const concatenated = Buffer.concat(buffers);
+  const utf8Text = concatenated.toString('utf-8');
+
+  // If running on Windows and UTF-8 replacement character \uFFFD is detected, decode using GBK/CP936
+  if (process.platform === 'win32' && utf8Text.includes('\uFFFD')) {
+    try {
+      const gbkDecoder = new TextDecoder('gbk');
+      return gbkDecoder.decode(concatenated);
+    } catch {
+      return utf8Text;
+    }
+  }
+
+  return utf8Text;
+}
+
 export async function runProcess(
   command: string,
   options: ProcessOptions = {}
@@ -35,8 +53,8 @@ export async function runProcess(
   const timeoutMs = options.timeoutMs || 120000;
 
   return new Promise((resolve) => {
-    let stdoutData = '';
-    let stderrData = '';
+    const stdoutChunks: Buffer[] = [];
+    const stderrChunks: Buffer[] = [];
     let timedOut = false;
 
     const child = spawn(command, {
@@ -55,22 +73,25 @@ export async function runProcess(
       }, 3000);
     }, timeoutMs);
 
-    child.stdout?.on('data', (chunk) => {
-      stdoutData += chunk.toString();
+    child.stdout?.on('data', (chunk: Buffer) => {
+      stdoutChunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
     });
 
-    child.stderr?.on('data', (chunk) => {
-      stderrData += chunk.toString();
+    child.stderr?.on('data', (chunk: Buffer) => {
+      stderrChunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
     });
 
     child.on('error', (err) => {
       clearTimeout(timer);
       const durationMs = Date.now() - startTime;
+      const stdout = decodeOutputBuffer(stdoutChunks);
+      const stderr = decodeOutputBuffer(stderrChunks) || err.message;
+
       resolve({
         command,
         exitCode: -1,
-        stdout: stdoutData,
-        stderr: err.message,
+        stdout,
+        stderr,
         durationMs,
         success: false,
         timedOut: false,
@@ -81,12 +102,14 @@ export async function runProcess(
       clearTimeout(timer);
       const durationMs = Date.now() - startTime;
       const exitCode = code ?? -1;
+      const stdout = decodeOutputBuffer(stdoutChunks);
+      const stderr = decodeOutputBuffer(stderrChunks);
 
       resolve({
         command,
         exitCode,
-        stdout: stdoutData,
-        stderr: stderrData,
+        stdout,
+        stderr,
         durationMs,
         success: exitCode === 0 && !timedOut,
         timedOut,

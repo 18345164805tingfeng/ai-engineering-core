@@ -6,6 +6,7 @@ import {
   ExecutorCapabilities,
   ExecutorHealth,
 } from '../schema/executor.schema.js';
+import { decodeOutputBuffer } from '../../tools/process-tool.js';
 
 export interface CodexExecutorOptions {
   id?: string;
@@ -178,8 +179,8 @@ export class CodexAgentExecutor extends AgentExecutor {
     }
 
     return new Promise((resolve) => {
-      let stdoutData = '';
-      let stderrData = '';
+      const stdoutChunks: Buffer[] = [];
+      const stderrChunks: Buffer[] = [];
       let killedByTimeout = false;
 
       const child = spawn(this.cliPath, args, {
@@ -200,24 +201,25 @@ export class CodexAgentExecutor extends AgentExecutor {
         }, 3000);
       }, timeout);
 
-      child.stdout?.on('data', (chunk) => {
-        stdoutData += chunk.toString();
+      child.stdout?.on('data', (chunk: Buffer) => {
+        stdoutChunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
       });
 
-      child.stderr?.on('data', (chunk) => {
-        stderrData += chunk.toString();
+      child.stderr?.on('data', (chunk: Buffer) => {
+        stderrChunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
       });
 
       child.on('error', (err) => {
         clearTimeout(timer);
         this.activeProcesses.delete(runId);
+        const stdout = decodeOutputBuffer(stdoutChunks);
         const errorMsg = `Failed to spawn Codex CLI process: ${err.message}`;
         this.consecutiveFailures++;
         this.lastFailureAt = new Date().toISOString();
         this.lastError = errorMsg;
         resolve({
           success: false,
-          output: stdoutData || null,
+          output: stdout || null,
           error: errorMsg,
         });
       });
@@ -226,6 +228,9 @@ export class CodexAgentExecutor extends AgentExecutor {
         clearTimeout(timer);
         this.activeProcesses.delete(runId);
 
+        const stdout = decodeOutputBuffer(stdoutChunks);
+        const stderr = decodeOutputBuffer(stderrChunks);
+
         if (killedByTimeout) {
           const errorMsg = `Codex CLI process timed out after ${timeout}ms`;
           this.consecutiveFailures++;
@@ -233,7 +238,7 @@ export class CodexAgentExecutor extends AgentExecutor {
           this.lastError = errorMsg;
           resolve({
             success: false,
-            output: stdoutData,
+            output: stdout,
             error: errorMsg,
           });
           return;
@@ -244,19 +249,19 @@ export class CodexAgentExecutor extends AgentExecutor {
           this.lastSuccessAt = new Date().toISOString();
           resolve({
             success: true,
-            output: stdoutData,
-            structuredResult: { stdout: stdoutData, stderr: stderrData, exitCode: code },
+            output: stdout,
+            structuredResult: { stdout, stderr, exitCode: code },
           });
         } else {
-          const errorMsg = stderrData.trim() || `Codex CLI exited with code ${code}`;
+          const errorMsg = stderr.trim() || `Codex CLI exited with code ${code}`;
           this.consecutiveFailures++;
           this.lastFailureAt = new Date().toISOString();
           this.lastError = errorMsg;
           resolve({
             success: false,
-            output: stdoutData,
+            output: stdout,
             error: errorMsg,
-            structuredResult: { stdout: stdoutData, stderr: stderrData, exitCode: code },
+            structuredResult: { stdout, stderr, exitCode: code },
           });
         }
       });
