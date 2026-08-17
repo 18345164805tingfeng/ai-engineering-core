@@ -34,6 +34,7 @@ export type ReviewResultEnum = z.infer<typeof ReviewResultEnumSchema>;
 export const ReviewResultSchema = z.object({
   round: z.number().int().nonnegative().default(0),
   result: ReviewResultEnumSchema.nullable().default(null),
+  summary: z.string().optional(),
   issues: z.array(ReviewIssueSchema).default([]),
 });
 export type ReviewResult = z.infer<typeof ReviewResultSchema>;
