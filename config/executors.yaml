@@ -21,4 +21,4 @@ executors:
   qwen-local:
     type: model
     provider: ollama
-    model: qwen
+    model: qwen3.6:latest

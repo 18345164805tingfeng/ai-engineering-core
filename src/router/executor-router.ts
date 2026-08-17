@@ -24,9 +24,20 @@ export interface ExecuteRoleOptions {
   timeoutMs?: number;
 }
 
+const DEFAULT_ROLES_CONFIG: RolesConfig = {
+  roles: {
+    router: { primary: 'qwen-local', fallback: [] },
+    planner: { primary: 'antigravity-planner', fallback: ['qwen-local'] },
+    developer: { primary: 'codex', fallback: ['qwen-local'] },
+    reviewer: { primary: 'antigravity-reviewer', fallback: ['qwen-local'] },
+    tester: { primary: 'codex', fallback: ['qwen-local'] },
+    architect: { primary: 'antigravity-architect', fallback: ['qwen-local'] },
+  },
+};
+
 export class ExecutorRouter {
   private configPath: string;
-  private rolesConfig: RolesConfig = { roles: {} as Record<Role, RoleMapping> };
+  private rolesConfig: RolesConfig = JSON.parse(JSON.stringify(DEFAULT_ROLES_CONFIG));
   private registry: ExecutorRegistry;
   private healthManager: HealthManager;
 
@@ -42,28 +53,53 @@ export class ExecutorRouter {
   }
 
   loadConfig(): void {
-    if (!existsSync(this.configPath)) {
-      this.rolesConfig = { roles: {} as Record<Role, RoleMapping> };
+    const candidatePaths = [
+      this.configPath,
+      path.resolve(process.cwd(), 'config', 'roles.yaml'),
+      path.resolve(process.cwd(), '..', 'config', 'roles.yaml'),
+    ];
+
+    let foundPath: string | null = null;
+    for (const p of candidatePaths) {
+      if (p && existsSync(p)) {
+        foundPath = p;
+        break;
+      }
+    }
+
+    if (!foundPath) {
+      this.rolesConfig = JSON.parse(JSON.stringify(DEFAULT_ROLES_CONFIG));
       return;
     }
 
     try {
-      const content = readFileSync(this.configPath, 'utf-8');
+      const content = readFileSync(foundPath, 'utf-8');
       const raw = parseYaml(content) || {};
-      this.rolesConfig = RolesConfigSchema.parse(raw);
-    } catch (err) {
-      throw new Error(`Failed to load roles config from '${this.configPath}': ${err instanceof Error ? err.message : String(err)}`);
+      const parsed = RolesConfigSchema.parse(raw);
+      this.rolesConfig = {
+        roles: {
+          ...DEFAULT_ROLES_CONFIG.roles,
+          ...parsed.roles,
+        },
+      };
+    } catch {
+      this.rolesConfig = JSON.parse(JSON.stringify(DEFAULT_ROLES_CONFIG));
     }
   }
 
   setRolesConfig(config: RolesConfig): void {
-    this.rolesConfig = RolesConfigSchema.parse(config);
+    this.rolesConfig = {
+      roles: {
+        ...DEFAULT_ROLES_CONFIG.roles,
+        ...RolesConfigSchema.parse(config).roles,
+      },
+    };
   }
 
   getRoleMapping(role: Role): RoleMapping {
-    const mapping = this.rolesConfig.roles[role];
+    const mapping = this.rolesConfig.roles[role] || DEFAULT_ROLES_CONFIG.roles[role];
     if (!mapping) {
-      throw new Error(`No executor mapping configured for role '${role}' in roles config.`);
+      return { primary: 'qwen-local', fallback: [] };
     }
     return mapping;
   }
