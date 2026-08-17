@@ -1,15 +1,18 @@
 import { createStep, createWorkflow } from '@mastra/core/workflows';
 import { z } from 'zod';
-import { TaskSchema, InternalTask } from '../../task/schema/task.schema.js';
+import { TaskSchema, InternalTask, TaskArbitrationSchema } from '../../task/schema/task.schema.js';
 import { ProjectContextSchema, ProjectContext } from '../../project/schema/project.schema.js';
 import { ReviewResult, ReviewResultSchema } from '../../task/schema/review-issue.schema.js';
 import { ExecutorRouter, defaultExecutorRouter } from '../../router/executor-router.js';
 import { runTestTool, ProcessResult } from '../../tools/index.js';
+import { runPlannerRole } from '../agents/planner.js';
+import { runArchitectRole } from '../agents/architect.js';
 
 export interface WorkflowOptions {
   executorRouter?: ExecutorRouter;
   maxRounds?: number;
   testRunner?: (role: any, context: ProjectContext) => Promise<ProcessResult>;
+  skipPlanning?: boolean;
 }
 
 export const softwareDevelopmentInputSchema = z.object({
@@ -25,6 +28,7 @@ export const softwareDevelopmentOutputSchema = z.object({
   finalReview: ReviewResultSchema.optional(),
   verificationResult: z.custom<ProcessResult>().optional(),
   needArbitration: z.boolean().default(false),
+  arbitration: TaskArbitrationSchema.optional(),
 });
 
 export async function executeSoftwareDevelopmentLoop(
@@ -38,17 +42,31 @@ export async function executeSoftwareDevelopmentLoop(
 
   let currentTask: InternalTask = {
     ...task,
-    status: 'CODING',
+    status: 'PLANNING',
     execution: { round: 0, changes: [] },
     review: { round: 0, result: null, issues: [] },
   };
 
+  // Step 0: Planning (Planner Role)
+  if (!options.skipPlanning) {
+    try {
+      const plan = await runPlannerRole(router, currentTask, projectContext);
+      currentTask.plan = plan;
+    } catch {
+      currentTask.plan = {
+        summary: `Plan for ${currentTask.requirement.title}`,
+        steps: [{ id: 'STEP-1', title: `Develop ${currentTask.requirement.title}` }],
+      };
+    }
+  }
+
   // Step 1: Initial Coding (Developer Role)
+  currentTask.status = 'CODING';
   const devResp = await router.executeRole({
     role: 'developer',
     task: currentTask,
     projectContext,
-    prompt: `Develop feature: ${currentTask.requirement.title}`,
+    prompt: `Develop feature: ${currentTask.requirement.title}\nPlan: ${JSON.stringify(currentTask.plan)}`,
   });
 
   if (!devResp.success) {
@@ -65,6 +83,7 @@ export async function executeSoftwareDevelopmentLoop(
   let round = 1;
   let finalReview: ReviewResult = { round: 0, result: null, issues: [] };
   let lastVerification: ProcessResult | undefined = undefined;
+  const reviewHistory: ReviewResult[] = [];
 
   while (round <= maxRounds) {
     currentTask.execution.round = round;
@@ -131,6 +150,7 @@ export async function executeSoftwareDevelopmentLoop(
 
     currentTask.review.result = finalReview.result;
     currentTask.review.issues = finalReview.issues;
+    reviewHistory.push(finalReview);
 
     // If Review PASS, task reaches DONE
     if (finalReview.result === 'PASS') {
@@ -148,7 +168,7 @@ export async function executeSoftwareDevelopmentLoop(
     // If Review FAIL and rounds < maxRounds, Developer fixes issues
     if (round < maxRounds) {
       currentTask.status = 'FIXING';
-      const fixResp = await router.executeRole({
+      await router.executeRole({
         role: 'developer',
         task: currentTask,
         projectContext,
@@ -158,24 +178,103 @@ export async function executeSoftwareDevelopmentLoop(
           verification: lastVerification,
         },
       });
-
-      if (!fixResp.success) {
-        // Continue to next round attempt or fail
-      }
     }
 
     round++;
   }
 
-  // Exceeded maxRounds without passing review -> NEED_ARBITRATION
+  // Step 4: Exceeded maxRounds -> NEED_ARBITRATION & Architect Role
   currentTask.status = 'NEED_ARBITRATION';
+  const arbitration = await runArchitectRole(router, currentTask, projectContext, reviewHistory);
+  currentTask.arbitration = arbitration;
+
+  // Final Fix Round if Architect decision is RETRY_DEVELOPER
+  if (arbitration.decision === 'RETRY_DEVELOPER') {
+    currentTask.status = 'FIXING';
+    await router.executeRole({
+      role: 'developer',
+      task: currentTask,
+      projectContext,
+      instruction: `Architect Final Fix Guidance: ${arbitration.feedback}\nReview Issues: ${JSON.stringify(finalReview.issues)}`,
+      contextData: {
+        architectArbitration: arbitration,
+        reviewHistory,
+      },
+    });
+
+    // Re-verify after Final Fix
+    currentTask.status = 'VERIFYING';
+    try {
+      lastVerification = await testRunner('developer', projectContext);
+    } catch (err) {
+      lastVerification = {
+        command: 'test',
+        exitCode: 1,
+        stdout: '',
+        stderr: err instanceof Error ? err.message : String(err),
+        durationMs: 0,
+        success: false,
+      };
+    }
+
+    // Re-review after Final Fix
+    currentTask.status = 'REVIEWING';
+    const finalReviewResp = await router.executeRole({
+      role: 'reviewer',
+      task: currentTask,
+      projectContext,
+    });
+
+    if (finalReviewResp.structuredResult) {
+      finalReview = finalReviewResp.structuredResult as ReviewResult;
+    }
+
+    if (finalReview.result === 'PASS') {
+      currentTask.status = 'DONE';
+      return {
+        taskId: currentTask.id,
+        status: 'DONE',
+        rounds: maxRounds + 1,
+        finalReview,
+        verificationResult: lastVerification,
+        needArbitration: true,
+        arbitration,
+      };
+    }
+  } else if (arbitration.decision === 'PROCEED') {
+    currentTask.status = 'DONE';
+    return {
+      taskId: currentTask.id,
+      status: 'DONE',
+      rounds: maxRounds,
+      finalReview,
+      verificationResult: lastVerification,
+      needArbitration: true,
+      arbitration,
+    };
+  } else if (arbitration.decision === 'CANCEL') {
+    currentTask.status = 'CANCELLED';
+    return {
+      taskId: currentTask.id,
+      status: 'CANCELLED',
+      rounds: maxRounds,
+      finalReview,
+      verificationResult: lastVerification,
+      needArbitration: true,
+      arbitration,
+    };
+  }
+
+  // MANUAL_INTERVENTION or Final Fix failed -> BLOCKED
+  currentTask.status = 'BLOCKED';
   return {
     taskId: currentTask.id,
-    status: 'NEED_ARBITRATION',
-    rounds: maxRounds,
+    status: 'BLOCKED',
+    rounds: maxRounds + 1,
     finalReview,
     verificationResult: lastVerification,
     needArbitration: true,
+    arbitration,
   };
 }
 

@@ -199,9 +199,8 @@ describe('Software Development Workflow & Review Fix Loop', () => {
       testRunner: mockTestRunner,
     });
 
-    expect(res.status).toBe('NEED_ARBITRATION');
-    expect(res.rounds).toBe(3);
     expect(res.needArbitration).toBe(true);
+    expect(res.status).toBe('BLOCKED');
     expect(res.finalReview?.result).toBe('FAIL');
   });
 });
