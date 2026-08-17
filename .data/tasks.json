@@ -92,7 +92,7 @@
     "arbitration": null,
     "timeline": [],
     "createdAt": "2026-08-17T16:09:31.536Z",
-    "updatedAt": "2026-08-17T16:30:38.063Z"
+    "updatedAt": "2026-08-17T16:35:19.902Z"
   },
   {
     "id": "TASK-1786983679694",
@@ -199,5 +199,111 @@
     ],
     "createdAt": "2026-08-17T16:27:53.477Z",
     "updatedAt": "2026-08-17T16:27:53.478Z"
+  },
+  {
+    "id": "TASK-1786984251188",
+    "source": {
+      "type": "manual",
+      "externalId": null,
+      "sync": false
+    },
+    "project": {
+      "id": "comfyui",
+      "root": "F:\\try\\ComfyUI"
+    },
+    "requirement": {
+      "title": "新增18_Wan_AI动画人像替换",
+      "description": "在 F:\\try\\ComfyUI\\user\\default\\workflows\\ 目录下新建一个名为 18_Wan_AI动画人像替换.json 的工作流文件",
+      "constraints": []
+    },
+    "priority": "normal",
+    "mode": "auto",
+    "status": "PLANNING",
+    "analysis": {
+      "type": null,
+      "complexity": null,
+      "risk": null
+    },
+    "plan": null,
+    "execution": {
+      "round": 0,
+      "changes": []
+    },
+    "verification": {
+      "results": []
+    },
+    "review": {
+      "round": 0,
+      "result": null,
+      "issues": []
+    },
+    "arbitration": null,
+    "timeline": [
+      {
+        "id": "aff7b9be-eefe-4a28-b1e0-fde381e14fe7",
+        "type": "TASK_CREATED",
+        "timestamp": "2026-08-17T16:30:51.189Z",
+        "message": "Task TASK-1786984251188 created with status PLANNING",
+        "payload": {
+          "projectId": "comfyui",
+          "source": "manual"
+        }
+      }
+    ],
+    "createdAt": "2026-08-17T16:30:51.188Z",
+    "updatedAt": "2026-08-17T16:30:51.189Z"
+  },
+  {
+    "id": "TASK-1786984359975",
+    "source": {
+      "type": "manual",
+      "externalId": null,
+      "sync": false
+    },
+    "project": {
+      "id": "comfyui",
+      "root": "F:\\try\\ComfyUI"
+    },
+    "requirement": {
+      "title": "新增18_Wan_AI动画人像替换",
+      "description": "在 F:\\try\\ComfyUI\\user\\default\\workflows\\ 目录下新建一个名为 18_Wan_AI动画人像替换.json 的工作流文件",
+      "constraints": []
+    },
+    "priority": "normal",
+    "mode": "auto",
+    "status": "PLANNING",
+    "analysis": {
+      "type": null,
+      "complexity": null,
+      "risk": null
+    },
+    "plan": null,
+    "execution": {
+      "round": 0,
+      "changes": []
+    },
+    "verification": {
+      "results": []
+    },
+    "review": {
+      "round": 0,
+      "result": null,
+      "issues": []
+    },
+    "arbitration": null,
+    "timeline": [
+      {
+        "id": "494e2615-6ed6-493c-89e1-9832358080bd",
+        "type": "TASK_CREATED",
+        "timestamp": "2026-08-17T16:32:39.975Z",
+        "message": "Task TASK-1786984359975 created with status PLANNING",
+        "payload": {
+          "projectId": "comfyui",
+          "source": "manual"
+        }
+      }
+    ],
+    "createdAt": "2026-08-17T16:32:39.975Z",
+    "updatedAt": "2026-08-17T16:32:39.975Z"
   }
 ]

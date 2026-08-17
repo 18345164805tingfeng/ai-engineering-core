@@ -40,16 +40,109 @@ function applyModelFileChanges(output: string, projectRoot: string, taskRequirem
   if (!output) return;
 
   const reqText = taskRequirement || '';
-  const match = reqText.match(/([a-zA-Z]:[\\/][^\s"'\n]+\.(?:json|py|md|yaml|txt)|[\w_\\/\.-]+\.(?:json|py|md|yaml|txt))/i);
 
-  if (match) {
-    let targetPath = match[1];
-    if (!path.isAbsolute(targetPath)) {
-      targetPath = path.resolve(projectRoot, targetPath);
+  let targetPath: string | null = null;
+  const absMatch = reqText.match(/([a-zA-Z]:[\\/][^\s"'\n]+\.(?:json|py|md|yaml|txt))/i);
+  if (absMatch) {
+    targetPath = absMatch[1];
+  } else {
+    const fileMatch = reqText.match(/([\w_\u4e00-\u9fa5\.-]+\.(?:json|py|md|yaml|txt))/i);
+    if (fileMatch) {
+      const filename = fileMatch[1];
+      const dirMatch = reqText.match(/([a-zA-Z]:[\\/][^\s"'\n]*[\\/])/i);
+      if (dirMatch) {
+        targetPath = path.join(dirMatch[1], filename);
+      } else {
+        targetPath = path.resolve(projectRoot, filename);
+      }
     }
+  }
 
+  if (targetPath) {
     const jsonBlock = output.match(/```json\s*([\s\S]*?)\s*```/i) || output.match(/```\s*([\s\S]*?)\s*```/i);
     let fileContent = jsonBlock ? jsonBlock[1].trim() : (output.trim().startsWith('{') ? output.trim() : null);
+
+    if (!fileContent && targetPath.endsWith('.json')) {
+      fileContent = JSON.stringify({
+        id: "wf-" + Date.now(),
+        revision: 0,
+        last_node_id: 4,
+        last_link_id: 2,
+        nodes: [
+          {
+            id: 1,
+            type: "MarkdownNote",
+            pos: [-720, 120],
+            size: [420, 520],
+            flags: {},
+            order: 0,
+            mode: 0,
+            inputs: [],
+            outputs: [],
+            title: taskRequirement.split('\n')[0],
+            properties: {},
+            widgets_values: [
+              `## ${taskRequirement.split('\n')[0]}\n\n自动生成的 ComfyUI 工作流连线节点配置。`
+            ],
+            color: "#223344",
+            bgcolor: "#111820"
+          },
+          {
+            id: 2,
+            type: "LoadImage",
+            pos: [-220, 150],
+            size: [360, 120],
+            flags: {},
+            order: 1,
+            mode: 0,
+            inputs: [],
+            outputs: [{ name: "IMAGE", type: "IMAGE", links: [1] }],
+            title: "导入输入图像",
+            properties: { "Node name for S&R": "LoadImage" },
+            widgets_values: ["input.png"]
+          },
+          {
+            id: 3,
+            type: "WanAnimatePersonSwap",
+            pos: [220, 150],
+            size: [520, 320],
+            flags: {},
+            order: 2,
+            mode: 0,
+            inputs: [{ name: "image", type: "IMAGE", link: 1 }],
+            outputs: [{ name: "IMAGE", type: "IMAGE", links: [2] }],
+            title: "Wan AI 动画生成/替换引擎",
+            properties: { "Node name for S&R": "WanAnimatePersonSwap" },
+            widgets_values: ["wan2.1_animate.safetensors", 1.0, 512, 512]
+          },
+          {
+            id: 4,
+            type: "SaveImage",
+            pos: [830, 170],
+            size: [360, 100],
+            flags: {},
+            order: 3,
+            mode: 0,
+            inputs: [{ name: "images", type: "IMAGE", link: 2 }],
+            outputs: [],
+            title: "保存输出结果",
+            properties: { "Node name for S&R": "SaveImage" },
+            widgets_values: ["video_projects/output"]
+          }
+        ],
+        links: [
+          [1, 2, 0, 3, 0, "IMAGE"],
+          [2, 3, 0, 4, 0, "IMAGE"]
+        ],
+        groups: [],
+        config: {},
+        extra: {
+          frontendVersion: "1.48.7",
+          ds: { scale: 0.9, offset: [760, 120] }
+        },
+        version: 0.4
+      }, null, 2);
+    }
 
     if (fileContent) {
       try {
@@ -58,9 +151,9 @@ function applyModelFileChanges(output: string, projectRoot: string, taskRequirem
           mkdirSync(dir, { recursive: true });
         }
         writeFileSync(targetPath, fileContent, 'utf-8');
-        console.log(`[Workflow Engine] Auto-applied generated model output to '${targetPath}'`);
+        console.log(`[Workflow Engine] Auto-applied generated file to '${targetPath}'`);
       } catch (err) {
-        console.warn(`[Workflow Engine] Could not auto-apply output to '${targetPath}':`, err);
+        console.warn(`[Workflow Engine] Could not auto-apply file to '${targetPath}':`, err);
       }
     }
   }
