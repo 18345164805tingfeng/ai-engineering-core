@@ -99,7 +99,7 @@ export async function runTestTool(
     }
   }
 
-  const result = await runProcess(cmd, {
+  let result = await runProcess(cmd, {
     cwd,
     ...options,
   });
@@ -113,6 +113,25 @@ export async function runTestTool(
         return fallbackResult;
       }
     }
+  }
+
+  // Handle WinError 32 file lock: kill orphan python processes and retry task execution
+  const hasFileLockError =
+    (result.stderr && (result.stderr.includes('另一个程序正在使用此文件') || result.stderr.includes('WinError 32'))) ||
+    (result.stdout && (result.stdout.includes('另一个程序正在使用此文件') || result.stdout.includes('WinError 32')));
+
+  if (hasFileLockError && process.platform === 'win32') {
+    try {
+      console.log('[VerificationTool] File lock detected (WinError 32). Terminating orphan python processes...');
+      await runProcess('taskkill /f /im python.exe', { cwd });
+    } catch {
+      // ignore taskkill errors if no process was running
+    }
+    // Retry command after killing orphan processes
+    result = await runProcess(cmd, {
+      cwd,
+      ...options,
+    });
   }
 
   return result;
