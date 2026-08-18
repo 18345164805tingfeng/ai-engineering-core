@@ -8,6 +8,7 @@ import { TaskNormalizer } from './normalizer/task-normalizer.js';
 import { defaultExecutorRegistry } from '../executors/executor-registry.js';
 import { SecretRedactor } from '../security/secret-redactor.js';
 import { defaultWorkflowRunManager } from '../workflow/run/workflow-run-manager.js';
+import { defaultWorkspaceManager } from '../workspace/workspace-manager.js';
 
 export class TaskGateway {
   private store: ITaskStore;
@@ -100,9 +101,11 @@ export class TaskGateway {
   }
 
   /**
-   * Cancels a task and propagates cancellation signal to running executors and workflow runs
+   * Cancels a task and propagates cancellation signal to running executors, workflow runs and workspace locks
    */
   async cancelTask(taskId: string, reason = 'Task cancelled by user'): Promise<Task> {
+    const task = await this.store.getTask(taskId);
+
     // 1. Record cancel.requested event
     await this.store.appendTimeline(taskId, {
       type: 'task.cancel.requested',
@@ -114,7 +117,16 @@ export class TaskGateway {
     // 2. Cancel isolated Workflow Run instance
     defaultWorkflowRunManager.cancelRunByTaskId(taskId, reason);
 
-    // 3. Propagate cancel signal to all registered executors if active
+    // 3. Release project workspace lock if held
+    if (task?.project?.id) {
+      try {
+        await defaultWorkspaceManager.releaseWorkspace(task.project.id, taskId);
+      } catch (err) {
+        console.warn(`Workspace release failed on cancel for task '${taskId}':`, err);
+      }
+    }
+
+    // 4. Propagate cancel signal to all registered executors if active
     const executors = defaultExecutorRegistry.getAll();
     for (const executor of executors) {
       try {
@@ -124,7 +136,7 @@ export class TaskGateway {
       }
     }
 
-    // 4. Transition status to CANCELLED
+    // 5. Transition status to CANCELLED
     return this.updateTaskStatus(taskId, 'CANCELLED', {
       summary: `Task ${taskId} cancelled`,
       message: reason,

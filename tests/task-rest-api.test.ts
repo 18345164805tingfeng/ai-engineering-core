@@ -44,6 +44,11 @@ describe('Task REST API Controller & Routes', () => {
     expect(getRes.status).toBe(200);
     expect(getRes.data.id).toBe(taskId);
     expect(getRes.data.requirement.title).toContain('[REDACTED]');
+    expect(getRes.data.workflow).toBeDefined();
+    expect(getRes.data.workflow.runId).toBeDefined();
+    expect(Array.isArray(getRes.data.steps)).toBe(true);
+    expect(getRes.data.workspace).toBeDefined();
+    expect(getRes.data.scheduling).toBeDefined();
 
     const notFoundRes = await controller.getTask('NON-EXISTENT');
     expect(notFoundRes.status).toBe(404);
