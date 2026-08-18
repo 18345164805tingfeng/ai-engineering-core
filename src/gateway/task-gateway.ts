@@ -7,6 +7,7 @@ import { ITaskSource, RawExternalTask } from './sources/task-source.js';
 import { TaskNormalizer } from './normalizer/task-normalizer.js';
 import { defaultExecutorRegistry } from '../executors/executor-registry.js';
 import { SecretRedactor } from '../security/secret-redactor.js';
+import { defaultWorkflowRunManager } from '../workflow/run/workflow-run-manager.js';
 
 export class TaskGateway {
   private store: ITaskStore;
@@ -51,6 +52,11 @@ export class TaskGateway {
     }
 
     const normalizedTask = TaskNormalizer.normalize(raw, options);
+
+    // 2. Register isolated Workflow Run instance
+    const run = defaultWorkflowRunManager.createRun(normalizedTask.id, normalizedTask.workflow.workflowId);
+    normalizedTask.workflow.runId = run.runId;
+
     return this.store.createTask(normalizedTask);
   }
 
@@ -61,7 +67,7 @@ export class TaskGateway {
   async getTimeline(taskId: string): Promise<TimelineEvent[]> {
     const task = await this.store.getTask(taskId);
     if (!task) {
-      throw new Error(`Task with id '${taskId}' not found.`);
+      throw new Error(`未找到 ID 为 '${taskId}' 的任务。`);
     }
     return task.timeline;
   }
@@ -94,10 +100,10 @@ export class TaskGateway {
   }
 
   /**
-   * Cancels a task and propagates cancellation signal to running executors
+   * Cancels a task and propagates cancellation signal to running executors and workflow runs
    */
   async cancelTask(taskId: string, reason = 'Task cancelled by user'): Promise<Task> {
-    // 1. First record cancel.requested event
+    // 1. Record cancel.requested event
     await this.store.appendTimeline(taskId, {
       type: 'task.cancel.requested',
       summary: `Cancel requested for task ${taskId}`,
@@ -105,7 +111,10 @@ export class TaskGateway {
       data: { reason: SecretRedactor.redactText(reason) },
     }).catch(() => {});
 
-    // 2. Propagate cancel signal to all registered executors if active
+    // 2. Cancel isolated Workflow Run instance
+    defaultWorkflowRunManager.cancelRunByTaskId(taskId, reason);
+
+    // 3. Propagate cancel signal to all registered executors if active
     const executors = defaultExecutorRegistry.getAll();
     for (const executor of executors) {
       try {
@@ -115,7 +124,7 @@ export class TaskGateway {
       }
     }
 
-    // 3. Transition status to CANCELLED
+    // 4. Transition status to CANCELLED
     return this.updateTaskStatus(taskId, 'CANCELLED', {
       summary: `Task ${taskId} cancelled`,
       message: reason,
