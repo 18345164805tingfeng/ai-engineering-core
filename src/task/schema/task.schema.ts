@@ -2,6 +2,12 @@ import { z } from 'zod';
 import { TaskStatusSchema } from '../state/task-state.js';
 import { ReviewResultSchema } from './review-issue.schema.js';
 import { TimelineEventSchema } from './timeline.schema.js';
+import {
+  WorkflowRunInfoSchema,
+  StepResultSchema,
+  TaskWorkspaceSchema,
+  TaskSchedulingSchema,
+} from '../../workflow/schema/step.schema.js';
 
 export const TaskSourceSchema = z.object({
   type: z.enum(['manual', 'feishu', 'jira', 'github_issue', 'webhook']),
@@ -121,10 +127,28 @@ export const TaskSchema = z.object({
   }),
   arbitration: TaskArbitrationSchema,
   timeline: z.array(TimelineEventSchema).default([]),
+  workflow: WorkflowRunInfoSchema.default({
+    workflowId: 'software-development',
+    runId: null,
+    currentStep: null,
+  }),
+  steps: z.array(StepResultSchema).default([]),
+  workspace: TaskWorkspaceSchema.default({
+    id: null,
+    mode: 'shared-lock',
+    root: null,
+    branch: null,
+    baseBranch: null,
+  }),
+  scheduling: TaskSchedulingSchema.default({
+    status: 'READY',
+    queuedAt: null,
+    startedAt: null,
+    waitingReason: null,
+  }),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
 });
 
 export type Task = z.infer<typeof TaskSchema>;
 export type InternalTask = Task;
-

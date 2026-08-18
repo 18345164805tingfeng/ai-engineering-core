@@ -5,6 +5,8 @@ import { defaultTaskStore, ITaskStore } from '../task/store/task-store.js';
 import { ManualSource, ManualTaskInput } from './sources/manual-source.js';
 import { ITaskSource, RawExternalTask } from './sources/task-source.js';
 import { TaskNormalizer } from './normalizer/task-normalizer.js';
+import { defaultExecutorRegistry } from '../executors/executor-registry.js';
+import { SecretRedactor } from '../security/secret-redactor.js';
 
 export class TaskGateway {
   private store: ITaskStore;
@@ -30,7 +32,24 @@ export class TaskGateway {
     return this.submitTask(raw, options);
   }
 
-  async submitTask(raw: RawExternalTask, options?: { taskId?: string }): Promise<Task> {
+  /**
+   * Submits a raw external task with idempotency check on (source.type + source.externalId)
+   */
+  async submitTask(raw: RawExternalTask | any, options?: { taskId?: string }): Promise<Task> {
+    const externalId = raw.externalId || raw.source?.externalId;
+    const sourceType = raw.sourceType || raw.source?.type || 'manual';
+
+    // 1. Idempotency Check: if externalId is provided, check for existing task
+    if (externalId) {
+      const existingTasks = await this.store.listTasks();
+      const duplicate = existingTasks.find(
+        (t) => t.source.type === sourceType && t.source.externalId === externalId
+      );
+      if (duplicate) {
+        return duplicate;
+      }
+    }
+
     const normalizedTask = TaskNormalizer.normalize(raw, options);
     return this.store.createTask(normalizedTask);
   }
@@ -50,7 +69,14 @@ export class TaskGateway {
   async updateTaskStatus(
     taskId: string,
     newStatus: TaskStatus,
-    options?: { message?: string; executor?: string; payload?: Record<string, unknown> }
+    options?: {
+      message?: string;
+      summary?: string;
+      executor?: string;
+      artifactId?: string;
+      data?: Record<string, unknown>;
+      payload?: Record<string, unknown>;
+    }
   ): Promise<Task> {
     const updated = await this.store.updateStatus(taskId, newStatus, options);
 
@@ -67,10 +93,33 @@ export class TaskGateway {
     return updated;
   }
 
+  /**
+   * Cancels a task and propagates cancellation signal to running executors
+   */
   async cancelTask(taskId: string, reason = 'Task cancelled by user'): Promise<Task> {
-    return this.updateTaskStatus(taskId, 'CANCELLED', {
+    // 1. First record cancel.requested event
+    await this.store.appendTimeline(taskId, {
+      type: 'task.cancel.requested',
+      summary: `Cancel requested for task ${taskId}`,
       message: reason,
-      payload: { reason },
+      data: { reason: SecretRedactor.redactText(reason) },
+    }).catch(() => {});
+
+    // 2. Propagate cancel signal to all registered executors if active
+    const executors = defaultExecutorRegistry.getAll();
+    for (const executor of executors) {
+      try {
+        await executor.cancel(taskId);
+      } catch (err) {
+        console.warn(`Executor '${executor.id}' cancel failed for task '${taskId}':`, err);
+      }
+    }
+
+    // 3. Transition status to CANCELLED
+    return this.updateTaskStatus(taskId, 'CANCELLED', {
+      summary: `Task ${taskId} cancelled`,
+      message: reason,
+      data: { reason: SecretRedactor.redactText(reason) },
     });
   }
 

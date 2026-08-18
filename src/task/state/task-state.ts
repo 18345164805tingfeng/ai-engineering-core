@@ -22,7 +22,7 @@ export const TaskStatusSchema = z.enum([
 export type TaskStatus = z.infer<typeof TaskStatusSchema>;
 
 /**
- * Valid transitions mapping for Task State Machine
+ * 任务状态机合法流转规则表
  */
 export const VALID_TRANSITIONS: Record<TaskStatus, TaskStatus[]> = {
   CREATED: ['LOADING_CONTEXT', 'ANALYZING', 'CANCELLED', 'FAILED'],
@@ -44,7 +44,7 @@ export const VALID_TRANSITIONS: Record<TaskStatus, TaskStatus[]> = {
 };
 
 /**
- * Checks if a transition from currentStatus to targetStatus is valid
+ * 检查是否允许从 currentStatus 流转到 targetStatus
  */
 export function canTransition(currentStatus: TaskStatus, targetStatus: TaskStatus): boolean {
   if (currentStatus === targetStatus) {
@@ -55,13 +55,13 @@ export function canTransition(currentStatus: TaskStatus, targetStatus: TaskStatu
 }
 
 /**
- * Validates transition or throws an error
+ * 校验状态流转合法性，不合法时抛出中文提示
  */
 export function validateStatusTransition(currentStatus: TaskStatus, targetStatus: TaskStatus): void {
   if (!canTransition(currentStatus, targetStatus)) {
     throw new Error(
-      `Invalid task status transition from '${currentStatus}' to '${targetStatus}'. Allowed transitions: [${
-        VALID_TRANSITIONS[currentStatus]?.join(', ') || 'none'
+      `非法的任务状态流转：无法从当前状态 '${currentStatus}' 流转至目标状态 '${targetStatus}'。当前允许的后续状态为：[${
+        VALID_TRANSITIONS[currentStatus]?.join(', ') || '无'
       }]`
     );
   }

@@ -10,8 +10,10 @@ import { runTestTool, ProcessResult } from '../../tools/index.js';
 import { runPlannerRole } from '../agents/planner.js';
 import { runArchitectRole } from '../agents/architect.js';
 import { defaultTaskStore } from '../../task/store/task-store.js';
+import { defaultArtifactStore } from '../../task/artifact/artifact-store.js';
 import { defaultProjectResolver } from '../../project/project-resolver.js';
 import { ContextLoader } from '../../project/context-loader.js';
+import { ProjectPathGuard } from '../../security/project-path-guard.js';
 
 export interface WorkflowOptions {
   executorRouter?: ExecutorRouter;
@@ -59,90 +61,16 @@ function applyModelFileChanges(output: string, projectRoot: string, taskRequirem
   }
 
   if (targetPath) {
+    // ProjectPathGuard security validation
+    try {
+      targetPath = ProjectPathGuard.validatePath(projectRoot, targetPath);
+    } catch (guardErr) {
+      console.warn(`[Security Guard] Blocked unsafe file write to '${targetPath}':`, guardErr);
+      return;
+    }
+
     const jsonBlock = output.match(/```json\s*([\s\S]*?)\s*```/i) || output.match(/```\s*([\s\S]*?)\s*```/i);
     let fileContent = jsonBlock ? jsonBlock[1].trim() : (output.trim().startsWith('{') ? output.trim() : null);
-
-    if (!fileContent && targetPath.endsWith('.json')) {
-      fileContent = JSON.stringify({
-        id: "wf-" + Date.now(),
-        revision: 0,
-        last_node_id: 4,
-        last_link_id: 2,
-        nodes: [
-          {
-            id: 1,
-            type: "MarkdownNote",
-            pos: [-720, 120],
-            size: [420, 520],
-            flags: {},
-            order: 0,
-            mode: 0,
-            inputs: [],
-            outputs: [],
-            title: taskRequirement.split('\n')[0],
-            properties: {},
-            widgets_values: [
-              `## ${taskRequirement.split('\n')[0]}\n\n自动生成的 ComfyUI 工作流连线节点配置。`
-            ],
-            color: "#223344",
-            bgcolor: "#111820"
-          },
-          {
-            id: 2,
-            type: "LoadImage",
-            pos: [-220, 150],
-            size: [360, 120],
-            flags: {},
-            order: 1,
-            mode: 0,
-            inputs: [],
-            outputs: [{ name: "IMAGE", type: "IMAGE", links: [1] }],
-            title: "导入输入图像",
-            properties: { "Node name for S&R": "LoadImage" },
-            widgets_values: ["input.png"]
-          },
-          {
-            id: 3,
-            type: "WanAnimatePersonSwap",
-            pos: [220, 150],
-            size: [520, 320],
-            flags: {},
-            order: 2,
-            mode: 0,
-            inputs: [{ name: "image", type: "IMAGE", link: 1 }],
-            outputs: [{ name: "IMAGE", type: "IMAGE", links: [2] }],
-            title: "Wan AI 动画生成/替换引擎",
-            properties: { "Node name for S&R": "WanAnimatePersonSwap" },
-            widgets_values: ["wan2.1_animate.safetensors", 1.0, 512, 512]
-          },
-          {
-            id: 4,
-            type: "SaveImage",
-            pos: [830, 170],
-            size: [360, 100],
-            flags: {},
-            order: 3,
-            mode: 0,
-            inputs: [{ name: "images", type: "IMAGE", link: 2 }],
-            outputs: [],
-            title: "保存输出结果",
-            properties: { "Node name for S&R": "SaveImage" },
-            widgets_values: ["video_projects/output"]
-          }
-        ],
-        links: [
-          [1, 2, 0, 3, 0, "IMAGE"],
-          [2, 3, 0, 4, 0, "IMAGE"]
-        ],
-        groups: [],
-        config: {},
-        extra: {
-          frontendVersion: "1.48.7",
-          ds: { scale: 0.9, offset: [760, 120] }
-        },
-        version: 0.4
-      }, null, 2);
-    }
 
     if (fileContent) {
       try {
@@ -181,11 +109,32 @@ export async function executeSoftwareDevelopmentLoop(
     await defaultTaskStore.updateTask(currentTask.id, currentTask).catch(() => {});
   }
 
+  await defaultTaskStore.appendTimeline(currentTask.id, {
+    type: 'task.started',
+    summary: `Workflow execution started for task ${currentTask.id}`,
+    data: { projectId: projectContext.projectId, mode: currentTask.mode },
+  }).catch(() => {});
+
   // Step 0: Planning (Planner Role)
   if (!options.skipPlanning) {
     try {
       const plan = await runPlannerRole(router, currentTask, projectContext);
-      currentTask.plan = plan;
+      if (plan) {
+        currentTask.plan = plan;
+
+        const planArtifact = await defaultArtifactStore.createArtifact({
+          taskId: currentTask.id,
+          type: 'plan_detail',
+          data: plan,
+        });
+
+        await defaultTaskStore.appendTimeline(currentTask.id, {
+          type: 'plan.completed',
+          summary: `Plan generated with ${plan.steps?.length || 0} steps`,
+          artifactId: planArtifact.id,
+          data: { stepCount: plan.steps?.length || 0, summary: plan.summary },
+        }).catch(() => {});
+      }
     } catch {
       currentTask.plan = {
         summary: `Plan for ${currentTask.requirement.title}`,
@@ -196,6 +145,12 @@ export async function executeSoftwareDevelopmentLoop(
 
   // Step 1: Initial Coding (Developer Role)
   currentTask.status = 'CODING';
+  await defaultTaskStore.appendTimeline(currentTask.id, {
+    type: 'development.started',
+    summary: `Developer role started coding`,
+    data: { round: 0 },
+  }).catch(() => {});
+
   const devResp = await router.executeRole({
     role: 'developer',
     task: currentTask,
@@ -205,6 +160,12 @@ export async function executeSoftwareDevelopmentLoop(
 
   if (!devResp.success) {
     currentTask.status = 'FAILED';
+    await defaultTaskStore.appendTimeline(currentTask.id, {
+      type: 'task.failed',
+      summary: 'Developer initial coding failed',
+      data: { error: devResp.error },
+    }).catch(() => {});
+
     return {
       taskId: currentTask.id,
       status: 'FAILED',
@@ -234,6 +195,12 @@ export async function executeSoftwareDevelopmentLoop(
 
     // Step 2: 真实验证 (Verifying)
     currentTask.status = 'VERIFYING';
+    await defaultTaskStore.appendTimeline(currentTask.id, {
+      type: 'verification.started',
+      summary: `Verification started for round ${round}`,
+      data: { round },
+    }).catch(() => {});
+
     try {
       lastVerification = await testRunner('developer', projectContext);
     } catch (err) {
@@ -247,8 +214,36 @@ export async function executeSoftwareDevelopmentLoop(
       };
     }
 
+    const testArtifact = await defaultArtifactStore.createArtifact({
+      taskId: currentTask.id,
+      type: 'test_log',
+      data: {
+        command: lastVerification.command,
+        exitCode: lastVerification.exitCode,
+        stdout: lastVerification.stdout,
+        stderr: lastVerification.stderr,
+      },
+    });
+
+    await defaultTaskStore.appendTimeline(currentTask.id, {
+      type: 'verification.completed',
+      summary: `Verification completed: ${lastVerification.success ? 'PASSED' : 'FAILED'} (ExitCode: ${lastVerification.exitCode})`,
+      artifactId: testArtifact.id,
+      data: {
+        success: lastVerification.success,
+        exitCode: lastVerification.exitCode,
+        durationMs: lastVerification.durationMs,
+      },
+    }).catch(() => {});
+
     // Step 3: Code Review (Reviewer Role)
     currentTask.status = 'REVIEWING';
+    await defaultTaskStore.appendTimeline(currentTask.id, {
+      type: 'review.started',
+      summary: `Review started for round ${round}`,
+      data: { round },
+    }).catch(() => {});
+
     const reviewResp = await router.executeRole({
       role: 'reviewer',
       task: currentTask,
@@ -295,9 +290,32 @@ export async function executeSoftwareDevelopmentLoop(
     currentTask.review.issues = finalReview.issues;
     reviewHistory.push(finalReview);
 
+    const reviewArtifact = await defaultArtifactStore.createArtifact({
+      taskId: currentTask.id,
+      type: 'review_detail',
+      data: finalReview,
+    });
+
+    await defaultTaskStore.appendTimeline(currentTask.id, {
+      type: 'review.completed',
+      summary: `Review round ${round} finished with result: ${finalReview.result}`,
+      artifactId: reviewArtifact.id,
+      data: {
+        round,
+        result: finalReview.result,
+        issuesCount: finalReview.issues?.length || 0,
+      },
+    }).catch(() => {});
+
     // If Review PASS, task reaches DONE
     if (finalReview.result === 'PASS') {
       currentTask.status = 'DONE';
+      await defaultTaskStore.appendTimeline(currentTask.id, {
+        type: 'task.completed',
+        summary: `Task ${currentTask.id} completed successfully in round ${round}`,
+        data: { rounds: round, result: 'PASS' },
+      }).catch(() => {});
+
       return {
         taskId: currentTask.id,
         status: 'DONE',
@@ -311,6 +329,12 @@ export async function executeSoftwareDevelopmentLoop(
     // If Review FAIL and rounds < maxRounds, Developer fixes issues
     if (round < maxRounds) {
       currentTask.status = 'FIXING';
+      await defaultTaskStore.appendTimeline(currentTask.id, {
+        type: 'fix.started',
+        summary: `Developer started fixing ${finalReview.issues?.length || 0} review issues`,
+        data: { round, issuesCount: finalReview.issues?.length || 0 },
+      }).catch(() => {});
+
       await router.executeRole({
         role: 'developer',
         task: currentTask,
@@ -328,8 +352,27 @@ export async function executeSoftwareDevelopmentLoop(
 
   // Step 4: Exceeded maxRounds -> NEED_ARBITRATION & Architect Role
   currentTask.status = 'NEED_ARBITRATION';
+  await defaultTaskStore.appendTimeline(currentTask.id, {
+    type: 'arbitration.started',
+    summary: `Task reached maximum review rounds (${maxRounds}), entering architect arbitration`,
+    data: { maxRounds },
+  }).catch(() => {});
+
   const arbitration = await runArchitectRole(router, currentTask, projectContext, reviewHistory);
   currentTask.arbitration = arbitration;
+
+  const arbitrationArtifact = await defaultArtifactStore.createArtifact({
+    taskId: currentTask.id,
+    type: 'arbitration_detail',
+    data: arbitration,
+  });
+
+  await defaultTaskStore.appendTimeline(currentTask.id, {
+    type: 'arbitration.completed',
+    summary: `Architect arbitration decision: ${arbitration.decision}`,
+    artifactId: arbitrationArtifact.id,
+    data: { decision: arbitration.decision, feedback: arbitration.feedback },
+  }).catch(() => {});
 
   // Final Fix Round if Architect decision is RETRY_DEVELOPER
   if (arbitration.decision === 'RETRY_DEVELOPER') {
@@ -374,6 +417,12 @@ export async function executeSoftwareDevelopmentLoop(
 
     if (finalReview.result === 'PASS') {
       currentTask.status = 'DONE';
+      await defaultTaskStore.appendTimeline(currentTask.id, {
+        type: 'task.completed',
+        summary: `Task completed after final architect fix round`,
+        data: { rounds: maxRounds + 1, result: 'PASS' },
+      }).catch(() => {});
+
       return {
         taskId: currentTask.id,
         status: 'DONE',

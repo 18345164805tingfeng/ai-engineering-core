@@ -108,7 +108,7 @@ describe('Phase 1: Task Core & Task Gateway', () => {
       expect(canTransition('CODING', 'DONE')).toBe(false);
 
       expect(() => validateStatusTransition('CREATED', 'DONE')).toThrow(
-        /Invalid task status transition/
+        /非法的任务状态流转|Invalid task status transition/
       );
     });
   });

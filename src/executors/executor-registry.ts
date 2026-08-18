@@ -13,6 +13,10 @@ export class ExecutorRegistry {
     this.executors.set(executor.id, executor);
   }
 
+  register(executor: IExecutor): void {
+    this.registerExecutor(executor);
+  }
+
   getExecutor(id: string): IExecutor | undefined {
     return this.executors.get(id);
   }
@@ -27,6 +31,10 @@ export class ExecutorRegistry {
 
   listExecutors(): IExecutor[] {
     return Array.from(this.executors.values());
+  }
+
+  getAll(): IExecutor[] {
+    return this.listExecutors();
   }
 
   clear(): void {

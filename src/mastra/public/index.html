@@ -1,0 +1,858 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Engineering Core - 多模型软件工程编排控制台</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-primary: #0a0e17;
+      --bg-secondary: #111827;
+      --bg-card: rgba(17, 24, 39, 0.75);
+      --bg-card-hover: rgba(31, 41, 55, 0.85);
+      --border-color: rgba(255, 255, 255, 0.08);
+      --border-glow: rgba(59, 130, 246, 0.35);
+      --text-main: #f3f4f6;
+      --text-muted: #9ca3af;
+      --text-dim: #6b7280;
+      --accent-blue: #3b82f6;
+      --accent-cyan: #06b6d4;
+      --accent-purple: #8b5cf6;
+      --accent-green: #10b981;
+      --accent-amber: #f59e0b;
+      --accent-rose: #f43f5e;
+      --radius-sm: 8px;
+      --radius-md: 12px;
+      --radius-lg: 18px;
+      --shadow-subtle: 0 4px 20px rgba(0, 0, 0, 0.4);
+      --shadow-glow: 0 0 25px rgba(59, 130, 246, 0.15);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background-color: var(--bg-primary);
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      background-image: 
+        radial-gradient(at 0% 0%, rgba(59, 130, 246, 0.12) 0px, transparent 50%),
+        radial-gradient(at 100% 100%, rgba(139, 92, 246, 0.1) 0px, transparent 50%),
+        radial-gradient(at 50% 50%, rgba(6, 182, 212, 0.05) 0px, transparent 50%);
+      background-attachment: fixed;
+    }
+
+    /* 顶部导航 */
+    header {
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      background: rgba(10, 14, 23, 0.85);
+      border-bottom: 1px solid var(--border-color);
+      padding: 16px 32px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .brand-logo {
+      width: 38px;
+      height: 38px;
+      border-radius: var(--radius-sm);
+      background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      color: #fff;
+      font-size: 18px;
+      box-shadow: 0 0 15px rgba(59, 130, 246, 0.5);
+    }
+
+    .brand-title h1 {
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      background: linear-gradient(to right, #fff, #93c5fd);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .brand-title p {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .nav-actions {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .badge-pill {
+      font-size: 12px;
+      padding: 4px 10px;
+      border-radius: 9999px;
+      background: rgba(16, 185, 129, 0.15);
+      color: var(--accent-green);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .badge-pill::before {
+      content: '';
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--accent-green);
+      box-shadow: 0 0 8px var(--accent-green);
+    }
+
+    /* 主布局 */
+    main {
+      flex: 1;
+      max-width: 1440px;
+      margin: 0 auto;
+      padding: 32px 24px;
+      width: 100%;
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 28px;
+    }
+
+    /* 顶部指标卡片 */
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 18px;
+    }
+
+    .metric-card {
+      background: var(--bg-card);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      padding: 20px;
+      box-shadow: var(--shadow-subtle);
+      transition: all 0.25s ease;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .metric-card:hover {
+      border-color: var(--border-glow);
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-glow);
+    }
+
+    .metric-card .title {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .metric-card .value {
+      font-size: 28px;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    .metric-card .sub {
+      font-size: 12px;
+      color: var(--text-dim);
+      margin-top: 6px;
+    }
+
+    /* 核心工作区两栏 */
+    .workspace-grid {
+      display: grid;
+      grid-template-columns: 380px 1fr;
+      gap: 24px;
+      align-items: start;
+    }
+
+    @media (max-width: 1024px) {
+      .workspace-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* 卡片容器 */
+    .panel {
+      background: var(--bg-card);
+      backdrop-filter: blur(16px);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-lg);
+      padding: 24px;
+      box-shadow: var(--shadow-subtle);
+    }
+
+    .panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      padding-bottom: 14px;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .panel-header h2 {
+      font-size: 16px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* 表单组件 */
+    .form-group {
+      margin-bottom: 16px;
+    }
+
+    label {
+      display: block;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+    }
+
+    input[type="text"], textarea, select {
+      width: 100%;
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-sm);
+      color: var(--text-main);
+      padding: 10px 14px;
+      font-size: 14px;
+      font-family: inherit;
+      outline: none;
+      transition: all 0.2s ease;
+    }
+
+    input[type="text"]:focus, textarea:focus, select:focus {
+      border-color: var(--accent-blue);
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+    }
+
+    textarea {
+      resize: vertical;
+      min-height: 85px;
+    }
+
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 10px 18px;
+      border-radius: var(--radius-sm);
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      transition: all 0.2s ease;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent-blue), #2563eb);
+      color: #fff;
+      box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35);
+      width: 100%;
+    }
+
+    .btn-primary:hover {
+      background: linear-gradient(135deg, #60a5fa, var(--accent-blue));
+      transform: translateY(-1px);
+      box-shadow: 0 6px 16px rgba(37, 99, 235, 0.5);
+    }
+
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.06);
+      color: var(--text-main);
+      border: 1px solid var(--border-color);
+    }
+
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.12);
+    }
+
+    .btn-danger {
+      background: rgba(244, 63, 94, 0.15);
+      color: var(--accent-rose);
+      border: 1px solid rgba(244, 63, 94, 0.3);
+    }
+
+    .btn-danger:hover {
+      background: rgba(244, 63, 94, 0.25);
+    }
+
+    /* 任务列表 */
+    .task-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      max-height: 600px;
+      overflow-y: auto;
+      padding-right: 4px;
+    }
+
+    .task-item {
+      background: rgba(15, 23, 42, 0.5);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      padding: 16px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .task-item:hover, .task-item.active {
+      background: var(--bg-card-hover);
+      border-color: var(--accent-blue);
+      transform: translateX(3px);
+    }
+
+    .task-item-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .task-id {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      color: var(--accent-cyan);
+      font-weight: 600;
+    }
+
+    .status-tag {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 3px 8px;
+      border-radius: 4px;
+      text-transform: uppercase;
+    }
+
+    .status-CREATED { background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3); }
+    .status-CODING, .status-PLANNING { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
+    .status-VERIFYING, .status-REVIEWING { background: rgba(139, 92, 246, 0.15); color: #c084fc; border: 1px solid rgba(139, 92, 246, 0.3); }
+    .status-DONE { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
+    .status-FAILED, .status-CANCELLED { background: rgba(244, 63, 94, 0.15); color: #fb7185; border: 1px solid rgba(244, 63, 94, 0.3); }
+
+    .task-title {
+      font-size: 14px;
+      font-weight: 500;
+      color: #fff;
+    }
+
+    .task-meta {
+      font-size: 12px;
+      color: var(--text-dim);
+      display: flex;
+      justify-content: space-between;
+    }
+
+    /* 详情展示与时间线 */
+    .detail-view {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .detail-header-card {
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      padding: 20px;
+    }
+
+    .detail-header-title {
+      font-size: 18px;
+      font-weight: 600;
+      color: #fff;
+      margin-bottom: 8px;
+    }
+
+    .detail-tags {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 10px;
+    }
+
+    .detail-tag {
+      font-size: 12px;
+      padding: 4px 10px;
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text-muted);
+      border: 1px solid var(--border-color);
+    }
+
+    /* 时间线 */
+    .timeline-container {
+      position: relative;
+      padding-left: 28px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    .timeline-container::before {
+      content: '';
+      position: absolute;
+      left: 10px;
+      top: 6px;
+      bottom: 6px;
+      width: 2px;
+      background: linear-gradient(to bottom, var(--accent-blue), var(--accent-purple), rgba(255,255,255,0.05));
+    }
+
+    .timeline-node {
+      position: relative;
+      background: rgba(15, 23, 42, 0.5);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      padding: 14px 18px;
+      transition: all 0.2s ease;
+    }
+
+    .timeline-node::before {
+      content: '';
+      position: absolute;
+      left: -24px;
+      top: 16px;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--accent-blue);
+      border: 2px solid var(--bg-primary);
+      box-shadow: 0 0 10px var(--accent-blue);
+    }
+
+    .timeline-node-header {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      color: var(--text-dim);
+      margin-bottom: 4px;
+    }
+
+    .timeline-node-type {
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 600;
+      color: var(--accent-cyan);
+    }
+
+    .timeline-node-summary {
+      font-size: 14px;
+      color: var(--text-main);
+      font-weight: 500;
+    }
+
+    .timeline-node-meta {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 6px;
+      font-family: 'JetBrains Mono', monospace;
+      background: rgba(0, 0, 0, 0.3);
+      padding: 6px 10px;
+      border-radius: 4px;
+    }
+
+    /* 空状态 */
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: var(--text-dim);
+    }
+
+    /* 滚动条 */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(255, 255, 255, 0.3);
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <div class="brand-logo">AI</div>
+      <div class="brand-title">
+        <h1>AI Engineering Core 控制台</h1>
+        <p>多模型软件工程协同与自动化流水线</p>
+      </div>
+    </div>
+    <div class="nav-actions">
+      <div class="badge-pill">沙箱已加固 · 实时防护</div>
+      <button class="btn btn-secondary" onclick="fetchTasks()">🔄 刷新列表</button>
+    </div>
+  </header>
+
+  <main>
+    <!-- 指标看板 -->
+    <div class="metrics-grid">
+      <div class="metric-card">
+        <div class="title"><span>总任务数</span> <span>📊</span></div>
+        <div class="value" id="metric-total">0</div>
+        <div class="sub">历史已记录的任务总量</div>
+      </div>
+      <div class="metric-card">
+        <div class="title"><span>执行完成 (DONE)</span> <span>✨</span></div>
+        <div class="value" id="metric-done" style="color: var(--accent-green);">0</div>
+        <div class="sub">闭环验证通过的任务</div>
+      </div>
+      <div class="metric-card">
+        <div class="title"><span>运行与修复中</span> <span>⚡</span></div>
+        <div class="value" id="metric-running" style="color: var(--accent-amber);">0</div>
+        <div class="sub">Coding / Verifying / Reviewing</div>
+      </div>
+      <div class="metric-card">
+        <div class="title"><span>安全沙箱拦截</span> <span>🛡️</span></div>
+        <div class="value" style="color: var(--accent-cyan);">100%</div>
+        <div class="sub">路径越界 / 高危命令拦截</div>
+      </div>
+    </div>
+
+    <!-- 工作区主体 -->
+    <div class="workspace-grid">
+      <!-- 左栏：新建任务与任务列表 -->
+      <div style="display: flex; flex-direction: column; gap: 24px;">
+        <!-- 新建任务表单 -->
+        <div class="panel">
+          <div class="panel-header">
+            <h2><span>🚀</span> 提交新开发任务</h2>
+          </div>
+          <form id="create-task-form" onsubmit="handleCreateTask(event)">
+            <div class="form-group">
+              <label for="project-select">目标工程项目</label>
+              <select id="project-select">
+                <option value="demo">demo (AI Engineering Core 自身)</option>
+                <option value="core">core (根工程目录)</option>
+                <option value="comfyui">comfyui (ComfyUI 绘图工作流)</option>
+                <option value="bi">bi (BI Platform 数据平台)</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="task-title-input">需求标题</label>
+              <input type="text" id="task-title-input" placeholder="例如：增加用户安全删除与依赖检查功能" required>
+            </div>
+
+            <div class="form-group">
+              <label for="task-desc-input">详细需求描述与约束条件</label>
+              <textarea id="task-desc-input" placeholder="请输入详细业务逻辑、约束规范与验收标准..."></textarea>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label for="priority-select">优先级</label>
+                <select id="priority-select">
+                  <option value="normal" selected>普通 (Normal)</option>
+                  <option value="high">高 (High)</option>
+                  <option value="urgent">紧急 (Urgent)</option>
+                  <option value="low">低 (Low)</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="mode-select">工作流模式</label>
+                <select id="mode-select">
+                  <option value="auto" selected>自动模式 (Auto)</option>
+                  <option value="standard">标准模式 (Standard)</option>
+                  <option value="fast">快速模式 (Fast)</option>
+                  <option value="strict">严格仲裁模式 (Strict)</option>
+                </select>
+              </div>
+            </div>
+
+            <button type="submit" class="btn btn-primary" id="btn-submit">
+              <span>⚡</span> 立即创建并执行任务
+            </button>
+          </form>
+        </div>
+
+        <!-- 任务列表 -->
+        <div class="panel">
+          <div class="panel-header">
+            <h2><span>📋</span> 任务执行历史</h2>
+            <span id="task-count-badge" style="font-size: 12px; color: var(--text-dim);">共 0 条</span>
+          </div>
+          <div class="task-list" id="task-list-container">
+            <div class="empty-state">正在加载任务列表...</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 右栏：任务详细视图与审计时间线 -->
+      <div class="panel">
+        <div class="panel-header">
+          <h2><span>🔍</span> 任务详细审计视图</h2>
+          <div id="detail-actions" style="display: none; gap: 8px;">
+            <button class="btn btn-danger" onclick="cancelCurrentTask()" style="padding: 6px 12px; font-size: 12px;">取消任务</button>
+            <button class="btn btn-secondary" onclick="resumeCurrentTask()" style="padding: 6px 12px; font-size: 12px;">恢复任务</button>
+          </div>
+        </div>
+
+        <div id="detail-view-container">
+          <div class="empty-state">
+            <div style="font-size: 40px; margin-bottom: 12px;">📑</div>
+            <p>请在左侧列表中点击选择任意任务，以查看其完整执行状态、结构化 Review 报告与审计时间线。</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    let allTasks = [];
+    let selectedTaskId = null;
+
+    async function fetchTasks() {
+      try {
+        const res = await fetch('/tasks');
+        if (res.ok) {
+          allTasks = await res.json();
+          renderMetrics();
+          renderTaskList();
+          if (selectedTaskId) {
+            renderTaskDetail(selectedTaskId);
+          }
+        }
+      } catch (err) {
+        console.warn('获取任务列表失败:', err);
+      }
+    }
+
+    function renderMetrics() {
+      document.getElementById('metric-total').innerText = allTasks.length;
+      document.getElementById('metric-done').innerText = allTasks.filter(t => t.status === 'DONE').length;
+      document.getElementById('metric-running').innerText = allTasks.filter(t => ['CODING', 'PLANNING', 'VERIFYING', 'REVIEWING', 'FIXING'].includes(t.status)).length;
+      document.getElementById('task-count-badge').innerText = `共 ${allTasks.length} 条`;
+    }
+
+    function renderTaskList() {
+      const container = document.getElementById('task-list-container');
+      if (!allTasks || allTasks.length === 0) {
+        container.innerHTML = `<div class="empty-state">暂无任务记录，请通过上方表单提交新任务。</div>`;
+        return;
+      }
+
+      container.innerHTML = allTasks.map(t => `
+        <div class="task-item ${t.id === selectedTaskId ? 'active' : ''}" onclick="selectTask('${t.id}')">
+          <div class="task-item-top">
+            <span class="task-id">${t.id}</span>
+            <span class="status-tag status-${t.status}">${t.status}</span>
+          </div>
+          <div class="task-title">${escapeHtml(t.requirement?.title || '未命名任务')}</div>
+          <div class="task-meta">
+            <span>📁 ${escapeHtml(t.project?.id || 'demo')}</span>
+            <span>⏱️ ${formatTime(t.updatedAt || t.createdAt)}</span>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function selectTask(taskId) {
+      selectedTaskId = taskId;
+      renderTaskList();
+      renderTaskDetail(taskId);
+    }
+
+    async function renderTaskDetail(taskId) {
+      const container = document.getElementById('detail-view-container');
+      const actions = document.getElementById('detail-actions');
+
+      let task = allTasks.find(t => t.id === taskId);
+      try {
+        const res = await fetch(`/tasks/${taskId}`);
+        if (res.ok) {
+          task = await res.json();
+        }
+      } catch (e) {}
+
+      if (!task) {
+        container.innerHTML = `<div class="empty-state">未找到任务详情</div>`;
+        actions.style.display = 'none';
+        return;
+      }
+
+      actions.style.display = 'flex';
+
+      const timeline = task.timeline || [];
+
+      container.innerHTML = `
+        <div class="detail-view">
+          <div class="detail-header-card">
+            <div style="display: flex; justify-content: space-between; align-items: start;">
+              <div>
+                <div class="detail-header-title">${escapeHtml(task.requirement?.title || task.id)}</div>
+                <div style="color: var(--text-muted); font-size: 13px; margin-top: 4px;">
+                  ${escapeHtml(task.requirement?.description || '（无附加详细描述）')}
+                </div>
+              </div>
+              <span class="status-tag status-${task.status}" style="font-size: 13px; padding: 6px 12px;">${task.status}</span>
+            </div>
+            <div class="detail-tags">
+              <div class="detail-tag">📁 工程: <strong>${escapeHtml(task.project?.id)}</strong></div>
+              <div class="detail-tag">⚡ 优先级: <strong>${task.priority}</strong></div>
+              <div class="detail-tag">⚙️ 模式: <strong>${task.mode}</strong></div>
+              <div class="detail-tag">🔄 迭代轮次: <strong>${task.execution?.round || 0}</strong></div>
+              <div class="detail-tag">📅 创建时间: <strong>${formatTime(task.createdAt)}</strong></div>
+            </div>
+          </div>
+
+          <!-- 时间线审计 -->
+          <div>
+            <h3 style="font-size: 15px; font-weight: 600; margin-bottom: 14px;">⏱️ 审计时间线 (${timeline.length} 节点)</h3>
+            <div class="timeline-container">
+              ${timeline.length === 0 ? '<div class="empty-state">暂无时间线事件记录</div>' : timeline.map(node => `
+                <div class="timeline-node">
+                  <div class="timeline-node-header">
+                    <span class="timeline-node-type">${escapeHtml(node.type)}</span>
+                    <span>${formatTime(node.timestamp)}</span>
+                  </div>
+                  <div class="timeline-node-summary">${escapeHtml(node.summary || node.message || '事件已触发')}</div>
+                  ${node.artifactId ? `<div style="font-size: 12px; color: var(--accent-blue); margin-top: 4px;">📦 关联审计制品: <code>${node.artifactId}</code></div>` : ''}
+                  ${node.data ? `<div class="timeline-node-meta">${escapeHtml(JSON.stringify(node.data, null, 2))}</div>` : ''}
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    async function handleCreateTask(e) {
+      e.preventDefault();
+      const btn = document.getElementById('btn-submit');
+      btn.disabled = true;
+      btn.innerHTML = `<span>⏳</span> 提交并启动中...`;
+
+      const project = document.getElementById('project-select').value;
+      const title = document.getElementById('task-title-input').value.trim();
+      const description = document.getElementById('task-desc-input').value.trim();
+      const priority = document.getElementById('priority-select').value;
+      const mode = document.getElementById('mode-select').value;
+
+      try {
+        const res = await fetch('/tasks', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ project, title, description, priority, mode, triggerWorkflow: true }),
+        });
+        const result = await res.json();
+        if (res.ok) {
+          document.getElementById('task-title-input').value = '';
+          document.getElementById('task-desc-input').value = '';
+          selectedTaskId = result.taskId;
+          await fetchTasks();
+        } else {
+          alert('任务创建失败: ' + (result.error || '未知错误'));
+        }
+      } catch (err) {
+        alert('提交异常: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = `<span>⚡</span> 立即创建并执行任务`;
+      }
+    }
+
+    async function cancelCurrentTask() {
+      if (!selectedTaskId) return;
+      if (!confirm(`确认要取消任务 ${selectedTaskId} 吗？`)) return;
+      try {
+        const res = await fetch(`/tasks/${selectedTaskId}/cancel`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ reason: '用户在控制台手动终止任务' }),
+        });
+        if (res.ok) {
+          await fetchTasks();
+        }
+      } catch (e) {
+        alert('取消操作异常: ' + e.message);
+      }
+    }
+
+    async function resumeCurrentTask() {
+      if (!selectedTaskId) return;
+      try {
+        const res = await fetch(`/tasks/${selectedTaskId}/resume`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: '用户在控制台手动恢复任务' }),
+        });
+        if (res.ok) {
+          await fetchTasks();
+        }
+      } catch (e) {
+        alert('恢复操作异常: ' + e.message);
+      }
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    function formatTime(isoStr) {
+      if (!isoStr) return '-';
+      try {
+        const d = new Date(isoStr);
+        return d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' (' + (d.getMonth()+1) + '/' + d.getDate() + ')';
+      } catch {
+        return isoStr;
+      }
+    }
+
+    // 初始化轮询刷新
+    fetchTasks();
+    setInterval(fetchTasks, 5000);
+  </script>
+</body>
+</html>

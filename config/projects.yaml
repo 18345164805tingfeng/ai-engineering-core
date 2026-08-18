@@ -21,7 +21,7 @@ projects:
 
   demo:
     name: Demo Project
-    root: ./demo
+    root: ./..
     aliases:
       - demo
       - 示例项目

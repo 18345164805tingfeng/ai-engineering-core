@@ -1,5 +1,8 @@
 import { spawn } from 'child_process';
 import path from 'node:path';
+import { ProcessCommandGuard, CommandGuardConfig } from '../security/process-command-guard.js';
+import { ProjectPathGuard } from '../security/project-path-guard.js';
+import { SecretRedactor } from '../security/secret-redactor.js';
 
 export interface ProcessResult {
   command: string;
@@ -13,8 +16,10 @@ export interface ProcessResult {
 
 export interface ProcessOptions {
   cwd?: string;
+  projectRoot?: string;
   timeoutMs?: number;
   env?: Record<string, string>;
+  commandConfig?: CommandGuardConfig;
   /** Optional custom runner for unit testing */
   customRunner?: (
     command: string,
@@ -46,11 +51,47 @@ export async function runProcess(
 ): Promise<ProcessResult> {
   const startTime = Date.now();
 
-  if (options.customRunner) {
-    return options.customRunner(command, options);
+  // 1. ProcessCommandGuard security check
+  const evalResult = ProcessCommandGuard.evaluate(command, options.commandConfig);
+  if (evalResult.level !== 'SAFE') {
+    return {
+      command,
+      exitCode: 126,
+      stdout: '',
+      stderr: `[Security Error] Command blocked (${evalResult.level}): ${evalResult.reason || 'Not permitted'}`,
+      durationMs: 0,
+      success: false,
+      timedOut: false,
+    };
   }
 
-  const cwd = options.cwd || process.cwd();
+  // 2. ProjectPathGuard cwd check if projectRoot is supplied
+  let cwd = options.cwd || process.cwd();
+  if (options.projectRoot) {
+    try {
+      cwd = ProjectPathGuard.validatePath(options.projectRoot, cwd);
+    } catch (err) {
+      return {
+        command,
+        exitCode: 126,
+        stdout: '',
+        stderr: `[Security Error] Working directory outside projectRoot: ${err instanceof Error ? err.message : String(err)}`,
+        durationMs: 0,
+        success: false,
+        timedOut: false,
+      };
+    }
+  }
+
+  if (options.customRunner) {
+    const customRes = await options.customRunner(command, options);
+    return {
+      ...customRes,
+      stdout: SecretRedactor.redactText(customRes.stdout),
+      stderr: SecretRedactor.redactText(customRes.stderr),
+    };
+  }
+
   const timeoutMs = options.timeoutMs || 120000;
 
   let finalCommand = command;
@@ -94,8 +135,8 @@ export async function runProcess(
     child.on('error', (err) => {
       clearTimeout(timer);
       const durationMs = Date.now() - startTime;
-      const stdout = decodeOutputBuffer(stdoutChunks);
-      const stderr = decodeOutputBuffer(stderrChunks) || err.message;
+      const stdout = SecretRedactor.redactText(decodeOutputBuffer(stdoutChunks));
+      const stderr = SecretRedactor.redactText(decodeOutputBuffer(stderrChunks) || err.message);
 
       resolve({
         command,
@@ -112,8 +153,8 @@ export async function runProcess(
       clearTimeout(timer);
       const durationMs = Date.now() - startTime;
       const exitCode = code ?? -1;
-      const stdout = decodeOutputBuffer(stdoutChunks);
-      const stderr = decodeOutputBuffer(stderrChunks);
+      const stdout = SecretRedactor.redactText(decodeOutputBuffer(stdoutChunks));
+      const stderr = SecretRedactor.redactText(decodeOutputBuffer(stderrChunks));
 
       resolve({
         command,
