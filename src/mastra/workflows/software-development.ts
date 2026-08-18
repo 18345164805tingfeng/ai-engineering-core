@@ -1,6 +1,4 @@
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
-import path from 'node:path';
-import { createStep, createWorkflow } from '@mastra/core/workflows';
+import { createWorkflow } from '@mastra/core/workflows';
 import { z } from 'zod';
 import { TaskSchema, InternalTask, TaskArbitrationSchema } from '../../task/schema/task.schema.js';
 import { ProjectContextSchema, ProjectContext } from '../../project/schema/project.schema.js';
@@ -13,7 +11,20 @@ import { defaultTaskStore } from '../../task/store/task-store.js';
 import { defaultArtifactStore } from '../../task/artifact/artifact-store.js';
 import { defaultProjectResolver } from '../../project/project-resolver.js';
 import { ContextLoader } from '../../project/context-loader.js';
-import { ProjectPathGuard } from '../../security/project-path-guard.js';
+import {
+  loadContextStep,
+  analyzeTaskStep,
+  planTaskStep,
+  acquireWorkspaceStep,
+  developStep,
+  verifyStep,
+  reviewStep,
+  fixStep,
+  arbitrateStep,
+  finalizeStep,
+  releaseWorkspaceStep,
+  applyModelFileChanges,
+} from '../steps/index.js';
 
 export interface WorkflowOptions {
   executorRouter?: ExecutorRouter;
@@ -24,7 +35,7 @@ export interface WorkflowOptions {
 
 export const softwareDevelopmentInputSchema = z.object({
   task: TaskSchema,
-  projectContext: ProjectContextSchema,
+  projectContext: ProjectContextSchema.optional(),
   maxRounds: z.number().int().positive().default(3),
 });
 
@@ -38,55 +49,11 @@ export const softwareDevelopmentOutputSchema = z.object({
   arbitration: TaskArbitrationSchema.optional(),
 });
 
-function applyModelFileChanges(output: string, projectRoot: string, taskRequirement: string): void {
-  if (!output) return;
+export { applyModelFileChanges };
 
-  const reqText = taskRequirement || '';
-
-  let targetPath: string | null = null;
-  const absMatch = reqText.match(/([a-zA-Z]:[\\/][^\s"'\n]+\.(?:json|py|md|yaml|txt))/i);
-  if (absMatch) {
-    targetPath = absMatch[1];
-  } else {
-    const fileMatch = reqText.match(/([\w_\u4e00-\u9fa5\.-]+\.(?:json|py|md|yaml|txt))/i);
-    if (fileMatch) {
-      const filename = fileMatch[1];
-      const dirMatch = reqText.match(/([a-zA-Z]:[\\/][^\s"'\n]*[\\/])/i);
-      if (dirMatch) {
-        targetPath = path.join(dirMatch[1], filename);
-      } else {
-        targetPath = path.resolve(projectRoot, filename);
-      }
-    }
-  }
-
-  if (targetPath) {
-    // ProjectPathGuard security validation
-    try {
-      targetPath = ProjectPathGuard.validatePath(projectRoot, targetPath);
-    } catch (guardErr) {
-      console.warn(`[Security Guard] Blocked unsafe file write to '${targetPath}':`, guardErr);
-      return;
-    }
-
-    const jsonBlock = output.match(/```json\s*([\s\S]*?)\s*```/i) || output.match(/```\s*([\s\S]*?)\s*```/i);
-    let fileContent = jsonBlock ? jsonBlock[1].trim() : (output.trim().startsWith('{') ? output.trim() : null);
-
-    if (fileContent) {
-      try {
-        const dir = path.dirname(targetPath);
-        if (!existsSync(dir)) {
-          mkdirSync(dir, { recursive: true });
-        }
-        writeFileSync(targetPath, fileContent, 'utf-8');
-        console.log(`[Workflow Engine] Auto-applied generated file to '${targetPath}'`);
-      } catch (err) {
-        console.warn(`[Workflow Engine] Could not auto-apply file to '${targetPath}':`, err);
-      }
-    }
-  }
-}
-
+/**
+ * Multi-Step Software Development Loop with fine-grained Step tracking
+ */
 export async function executeSoftwareDevelopmentLoop(
   task: InternalTask,
   projectContext: ProjectContext,
@@ -96,8 +63,29 @@ export async function executeSoftwareDevelopmentLoop(
   const maxRounds = options.maxRounds || 3;
   const testRunner = options.testRunner || runTestTool;
 
+  // Initialize workflow and run IDs
+  const runId = task.workflow?.runId || `RUN-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
   let currentTask: InternalTask = {
     ...task,
+    workflow: {
+      workflowId: 'software-development',
+      runId,
+      currentStep: 'load-context',
+    },
+    steps: task.steps || [],
+    workspace: {
+      id: `ws-${task.project.id}-${task.id}`,
+      mode: 'shared-lock',
+      root: projectContext.projectRoot,
+      branch: projectContext.git?.branch || 'main',
+      baseBranch: 'main',
+    },
+    scheduling: {
+      status: 'RUNNING',
+      queuedAt: task.scheduling?.queuedAt || new Date().toISOString(),
+      startedAt: new Date().toISOString(),
+      waitingReason: null,
+    },
     status: 'PLANNING',
     execution: { round: 0, changes: [] },
     review: { round: 0, result: null, issues: [] },
@@ -110,13 +98,14 @@ export async function executeSoftwareDevelopmentLoop(
   }
 
   await defaultTaskStore.appendTimeline(currentTask.id, {
-    type: 'task.started',
-    summary: `Workflow execution started for task ${currentTask.id}`,
-    data: { projectId: projectContext.projectId, mode: currentTask.mode },
+    type: 'workflow.run.started',
+    summary: `Workflow run '${runId}' started for task ${currentTask.id}`,
+    data: { runId, projectId: projectContext.projectId, mode: currentTask.mode },
   }).catch(() => {});
 
   // Step 0: Planning (Planner Role)
   if (!options.skipPlanning) {
+    currentTask.workflow.currentStep = 'plan-task';
     try {
       const plan = await runPlannerRole(router, currentTask, projectContext);
       if (plan) {
@@ -145,10 +134,11 @@ export async function executeSoftwareDevelopmentLoop(
 
   // Step 1: Initial Coding (Developer Role)
   currentTask.status = 'CODING';
+  currentTask.workflow.currentStep = 'develop';
   await defaultTaskStore.appendTimeline(currentTask.id, {
     type: 'development.started',
     summary: `Developer role started coding`,
-    data: { round: 0 },
+    data: { round: 0, runId },
   }).catch(() => {});
 
   const devResp = await router.executeRole({
@@ -160,10 +150,11 @@ export async function executeSoftwareDevelopmentLoop(
 
   if (!devResp.success) {
     currentTask.status = 'FAILED';
+    currentTask.workflow.currentStep = 'develop';
     await defaultTaskStore.appendTimeline(currentTask.id, {
       type: 'task.failed',
       summary: 'Developer initial coding failed',
-      data: { error: devResp.error },
+      data: { error: devResp.error, runId },
     }).catch(() => {});
 
     return {
@@ -195,10 +186,11 @@ export async function executeSoftwareDevelopmentLoop(
 
     // Step 2: 真实验证 (Verifying)
     currentTask.status = 'VERIFYING';
+    currentTask.workflow.currentStep = 'verify';
     await defaultTaskStore.appendTimeline(currentTask.id, {
       type: 'verification.started',
       summary: `Verification started for round ${round}`,
-      data: { round },
+      data: { round, runId },
     }).catch(() => {});
 
     try {
@@ -238,10 +230,11 @@ export async function executeSoftwareDevelopmentLoop(
 
     // Step 3: Code Review (Reviewer Role)
     currentTask.status = 'REVIEWING';
+    currentTask.workflow.currentStep = 'review';
     await defaultTaskStore.appendTimeline(currentTask.id, {
       type: 'review.started',
       summary: `Review started for round ${round}`,
-      data: { round },
+      data: { round, runId },
     }).catch(() => {});
 
     const reviewResp = await router.executeRole({
@@ -310,10 +303,11 @@ export async function executeSoftwareDevelopmentLoop(
     // If Review PASS, task reaches DONE
     if (finalReview.result === 'PASS') {
       currentTask.status = 'DONE';
+      currentTask.workflow.currentStep = 'finalize';
       await defaultTaskStore.appendTimeline(currentTask.id, {
         type: 'task.completed',
         summary: `Task ${currentTask.id} completed successfully in round ${round}`,
-        data: { rounds: round, result: 'PASS' },
+        data: { rounds: round, result: 'PASS', runId },
       }).catch(() => {});
 
       return {
@@ -329,10 +323,11 @@ export async function executeSoftwareDevelopmentLoop(
     // If Review FAIL and rounds < maxRounds, Developer fixes issues
     if (round < maxRounds) {
       currentTask.status = 'FIXING';
+      currentTask.workflow.currentStep = 'fix';
       await defaultTaskStore.appendTimeline(currentTask.id, {
         type: 'fix.started',
         summary: `Developer started fixing ${finalReview.issues?.length || 0} review issues`,
-        data: { round, issuesCount: finalReview.issues?.length || 0 },
+        data: { round, issuesCount: finalReview.issues?.length || 0, runId },
       }).catch(() => {});
 
       await router.executeRole({
@@ -352,10 +347,11 @@ export async function executeSoftwareDevelopmentLoop(
 
   // Step 4: Exceeded maxRounds -> NEED_ARBITRATION & Architect Role
   currentTask.status = 'NEED_ARBITRATION';
+  currentTask.workflow.currentStep = 'arbitrate';
   await defaultTaskStore.appendTimeline(currentTask.id, {
     type: 'arbitration.started',
     summary: `Task reached maximum review rounds (${maxRounds}), entering architect arbitration`,
-    data: { maxRounds },
+    data: { maxRounds, runId },
   }).catch(() => {});
 
   const arbitration = await runArchitectRole(router, currentTask, projectContext, reviewHistory);
@@ -377,6 +373,7 @@ export async function executeSoftwareDevelopmentLoop(
   // Final Fix Round if Architect decision is RETRY_DEVELOPER
   if (arbitration.decision === 'RETRY_DEVELOPER') {
     currentTask.status = 'FIXING';
+    currentTask.workflow.currentStep = 'fix';
     await router.executeRole({
       role: 'developer',
       task: currentTask,
@@ -390,6 +387,7 @@ export async function executeSoftwareDevelopmentLoop(
 
     // Re-verify after Final Fix
     currentTask.status = 'VERIFYING';
+    currentTask.workflow.currentStep = 'verify';
     try {
       lastVerification = await testRunner('developer', projectContext);
     } catch (err) {
@@ -405,6 +403,7 @@ export async function executeSoftwareDevelopmentLoop(
 
     // Re-review after Final Fix
     currentTask.status = 'REVIEWING';
+    currentTask.workflow.currentStep = 'review';
     const finalReviewResp = await router.executeRole({
       role: 'reviewer',
       task: currentTask,
@@ -417,10 +416,11 @@ export async function executeSoftwareDevelopmentLoop(
 
     if (finalReview.result === 'PASS') {
       currentTask.status = 'DONE';
+      currentTask.workflow.currentStep = 'finalize';
       await defaultTaskStore.appendTimeline(currentTask.id, {
         type: 'task.completed',
         summary: `Task completed after final architect fix round`,
-        data: { rounds: maxRounds + 1, result: 'PASS' },
+        data: { rounds: maxRounds + 1, result: 'PASS', runId },
       }).catch(() => {});
 
       return {
@@ -435,6 +435,7 @@ export async function executeSoftwareDevelopmentLoop(
     }
   } else if (arbitration.decision === 'PROCEED') {
     currentTask.status = 'DONE';
+    currentTask.workflow.currentStep = 'finalize';
     return {
       taskId: currentTask.id,
       status: 'DONE',
@@ -446,6 +447,7 @@ export async function executeSoftwareDevelopmentLoop(
     };
   } else if (arbitration.decision === 'CANCEL') {
     currentTask.status = 'CANCELLED';
+    currentTask.workflow.currentStep = 'finalize';
     return {
       taskId: currentTask.id,
       status: 'CANCELLED',
@@ -459,6 +461,7 @@ export async function executeSoftwareDevelopmentLoop(
 
   // MANUAL_INTERVENTION or Final Fix failed -> BLOCKED
   currentTask.status = 'BLOCKED';
+  currentTask.workflow.currentStep = 'finalize';
   return {
     taskId: currentTask.id,
     status: 'BLOCKED',
@@ -470,39 +473,23 @@ export async function executeSoftwareDevelopmentLoop(
   };
 }
 
-export const softwareDevelopmentStep = createStep({
-  id: 'software-development-step',
-  inputSchema: softwareDevelopmentInputSchema,
-  outputSchema: softwareDevelopmentOutputSchema,
-  execute: async ({ inputData }) => {
-    let { task, projectContext, maxRounds } = inputData;
-
-    if (task?.project?.id) {
-      try {
-        defaultProjectResolver.loadConfig();
-        const resolved = defaultProjectResolver.resolveProject(task.project.id);
-        const loadedCtx = ContextLoader.loadContext(resolved);
-        projectContext = {
-          ...loadedCtx,
-          ...projectContext,
-          commands: {
-            ...loadedCtx.commands,
-            ...(projectContext?.commands || {}),
-          },
-        };
-      } catch {
-        // preserve original projectContext if resolution fails
-      }
-    }
-
-    return await executeSoftwareDevelopmentLoop(task, projectContext, { maxRounds });
-  },
-});
-
+/**
+ * Mastra Multi-Step Decomposed Workflow definition
+ */
 export const softwareDevelopmentWorkflow = createWorkflow({
   id: 'software-development-workflow',
   inputSchema: softwareDevelopmentInputSchema,
   outputSchema: softwareDevelopmentOutputSchema,
 })
-  .then(softwareDevelopmentStep)
+  .then(loadContextStep)
+  .then(analyzeTaskStep)
+  .then(planTaskStep)
+  .then(acquireWorkspaceStep)
+  .then(developStep)
+  .then(verifyStep)
+  .then(reviewStep)
+  .then(finalizeStep)
+  .then(releaseWorkspaceStep)
   .commit();
+
+export * from '../steps/index.js';
