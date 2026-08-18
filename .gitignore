@@ -5,5 +5,7 @@ dist
 !.env.example
 *.log
 coverage
-.mastra
+.mastra/
+.data/
+**/.data/**
 .DS_Store
