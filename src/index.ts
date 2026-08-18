@@ -6,3 +6,5 @@ export * from './executors/index.js';
 export * from './router/index.js';
 export * from './security/index.js';
 export * from './workflow/index.js';
+export * from './workspace/index.js';
+export * from './scheduler/index.js';

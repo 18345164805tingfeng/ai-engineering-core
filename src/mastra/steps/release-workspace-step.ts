@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { TaskSchema, InternalTask } from '../../task/schema/task.schema.js';
 import { ProjectContextSchema, ProjectContext } from '../../project/schema/project.schema.js';
 import { defaultTaskStore } from '../../task/store/task-store.js';
+import { defaultWorkspaceManager } from '../../workspace/workspace-manager.js';
 import { executeTrackedStep } from './step-context.js';
 
 export const releaseWorkspaceInputSchema = z.object({
@@ -28,15 +29,17 @@ export const releaseWorkspaceStep = createStep({
     await executeTrackedStep(task, 'release-workspace', async () => {
       const workspaceId = task.workspace?.id || `ws-${task.project.id}-${task.id}`;
 
+      await defaultWorkspaceManager.releaseWorkspace(task.project.id, task.id);
+
       await defaultTaskStore.appendTimeline(task.id, {
         type: 'workspace.released',
-        summary: `工作区锁已安全释放（${workspaceId}）`,
-        data: { workspaceId },
+        summary: `项目工作区排他锁已安全释放（${workspaceId}）`,
+        data: { workspaceId, projectId: task.project.id },
       }).catch(() => {});
 
       return {
         status: 'COMPLETED' as const,
-        summary: `工作区资源已释放`,
+        summary: `工作区资源与项目排他锁已释放`,
         data: { workspaceId },
       };
     });

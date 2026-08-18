@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { TaskSchema, InternalTask } from '../../task/schema/task.schema.js';
 import { ProjectContextSchema, ProjectContext } from '../../project/schema/project.schema.js';
 import { defaultTaskStore } from '../../task/store/task-store.js';
+import { defaultWorkspaceManager } from '../../workspace/workspace-manager.js';
 import { executeTrackedStep } from './step-context.js';
 
 export const acquireWorkspaceInputSchema = z.object({
@@ -24,17 +25,34 @@ export const acquireWorkspaceStep = createStep({
     const projectContext = inputData.projectContext as ProjectContext;
 
     await executeTrackedStep(task, 'acquire-workspace', async () => {
-      task.workspace = {
-        id: `ws-${task.project.id}-${task.id}`,
-        mode: 'shared-lock',
-        root: projectContext.projectRoot,
-        branch: projectContext.git?.branch || 'main',
-        baseBranch: 'main',
+      task.scheduling = {
+        ...task.scheduling,
+        status: 'WAITING_FOR_WORKSPACE',
+        waitingReason: `正在申请项目 '${task.project.id}' 的工作区锁`,
+      };
+
+      await defaultTaskStore.appendTimeline(task.id, {
+        type: 'workspace.waiting',
+        summary: `正在申请项目 '${task.project.id}' 的工作区互斥排他锁`,
+        data: { projectId: task.project.id },
+      }).catch(() => {});
+
+      const workspace = await defaultWorkspaceManager.acquireWorkspace(
+        { id: task.project.id, root: projectContext.projectRoot },
+        task.id
+      );
+
+      task.workspace = workspace;
+      task.scheduling = {
+        ...task.scheduling,
+        status: 'RUNNING',
+        startedAt: task.scheduling?.startedAt || new Date().toISOString(),
+        waitingReason: null,
       };
 
       await defaultTaskStore.appendTimeline(task.id, {
         type: 'workspace.acquired',
-        summary: `已成功获取工作区锁（根目录：${projectContext.projectRoot}）`,
+        summary: `已成功获取项目工作区排他锁（根目录：${projectContext.projectRoot}）`,
         data: {
           workspaceId: task.workspace.id,
           mode: task.workspace.mode,
@@ -44,7 +62,7 @@ export const acquireWorkspaceStep = createStep({
 
       return {
         status: 'COMPLETED' as const,
-        summary: `工作区锁已就绪（模式：${task.workspace.mode}）`,
+        summary: `工作区排他锁已就绪（模式：${task.workspace.mode}）`,
         data: { workspaceId: task.workspace.id },
       };
     });
