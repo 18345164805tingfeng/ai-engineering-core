@@ -5,6 +5,7 @@ import { ProjectContextSchema, ProjectContext } from '../../project/schema/proje
 import { runTestTool, ProcessResult } from '../../tools/index.js';
 import { defaultTaskStore } from '../../task/store/task-store.js';
 import { defaultArtifactStore } from '../../task/artifact/artifact-store.js';
+import { VerificationClassifier, ClassifiedVerificationResult } from '../../workflow/verification/verification-classifier.js';
 import { executeTrackedStep } from './step-context.js';
 
 export const verifyInputSchema = z.object({
@@ -17,6 +18,7 @@ export const verifyOutputSchema = z.object({
   task: TaskSchema,
   projectContext: ProjectContextSchema,
   verificationResult: z.custom<ProcessResult>(),
+  classifiedResult: z.custom<ClassifiedVerificationResult>().optional(),
 });
 
 export const verifyStep = createStep({
@@ -28,6 +30,7 @@ export const verifyStep = createStep({
     const projectContext = inputData.projectContext as ProjectContext;
 
     let verificationResult: ProcessResult;
+    let classified: ClassifiedVerificationResult;
 
     await executeTrackedStep(task, 'verify', async () => {
       task.status = 'VERIFYING';
@@ -54,6 +57,8 @@ export const verifyStep = createStep({
         };
       }
 
+      classified = VerificationClassifier.classify(verificationResult);
+
       const testArtifact = await defaultArtifactStore.createArtifact({
         taskId: task.id,
         type: 'test_log',
@@ -63,28 +68,39 @@ export const verifyStep = createStep({
           stdout: verificationResult.stdout,
           stderr: verificationResult.stderr,
           durationMs: verificationResult.durationMs,
+          classification: classified,
         },
       });
 
       await defaultTaskStore.appendTimeline(task.id, {
         type: 'verification.completed',
-        summary: `测试执行完毕：${verificationResult.success ? '通过 (PASSED)' : '失败 (FAILED)'}（ExitCode: ${verificationResult.exitCode}，耗时: ${verificationResult.durationMs}ms）`,
+        summary: `测试执行完毕：[${classified.outcome}]（ExitCode: ${verificationResult.exitCode}，原因: ${classified.reason}）`,
         artifactId: testArtifact.id,
         data: {
-          success: verificationResult.success,
+          outcome: classified.outcome,
+          canAutoFix: classified.canAutoFixByDeveloper,
           exitCode: verificationResult.exitCode,
           durationMs: verificationResult.durationMs,
         },
       }).catch(() => {});
 
       return {
-        status: verificationResult.success ? ('COMPLETED' as const) : ('FAILED' as const),
-        summary: `测试验证：ExitCode ${verificationResult.exitCode}，耗时 ${verificationResult.durationMs}ms`,
+        status: classified.outcome === 'PASSED' ? ('COMPLETED' as const) : ('FAILED' as const),
+        summary: `测试结论：${classified.outcome}（${classified.reason}）`,
         artifactIds: [testArtifact.id],
-        data: { exitCode: verificationResult.exitCode, success: verificationResult.success },
+        data: {
+          outcome: classified.outcome,
+          canAutoFix: classified.canAutoFixByDeveloper,
+          exitCode: verificationResult.exitCode,
+        },
       };
     });
 
-    return { task, projectContext, verificationResult: verificationResult! };
+    return {
+      task,
+      projectContext,
+      verificationResult: verificationResult!,
+      classifiedResult: classified!,
+    };
   },
 });
